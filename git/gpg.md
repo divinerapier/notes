@@ -45,3 +45,11 @@ $ git config --local user.signingKey 1111111111111111
 $ git config --local gpg.program /usr/local/Cellar/gnupg/2.2.17/bin/gpg
 $ git config --local commit.gpgSign true
 ```
+
+#### Configure pinentry
+
+``` sh
+$ touch  ~/.gnupg/gpg-agent.conf
+$ echo "pinentry-program /usr/local/bin/pinentry-mac" >> ~/.gnupg/gpg-agent.conf
+$ echo "no-tty" >> ~/.gnupg/gpg.conf
+```
