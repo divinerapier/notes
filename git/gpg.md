@@ -53,3 +53,9 @@ $ touch  ~/.gnupg/gpg-agent.conf
 $ echo "pinentry-program /usr/local/bin/pinentry-mac" >> ~/.gnupg/gpg-agent.conf
 $ echo "no-tty" >> ~/.gnupg/gpg.conf
 ```
+
+## Reference
+
+1. https://help.github.com/en/articles/telling-git-about-your-signing-key   
+2. https://ducfilan.wordpress.com/2017/03/10/the-git-error-gpg-failed-to-sign-the-data/
+
