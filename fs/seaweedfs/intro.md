@@ -30,17 +30,11 @@ func (vg *VolumeGrowth) GrowByCountAndType(grpcDialOption grpc.DialOption, targe
     }
     return
 }
-func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topology, option *VolumeGrowOption) (int, error) {
-    servers, e := vg.findEmptySlotsForOneVolume(topo, option)
-    if e != nil {
-        return 0, e
-    }
-    vid, raftErr := topo.NextVolumeId()
-    if raftErr != nil {
-        return 0, raftErr
-    }
-    err := vg.grow(grpcDialOption, topo, vid, option, servers...)
-    return len(servers), err
+func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topology, option *VolumeGrowOption) int {
+    servers := vg.findEmptySlotsForOneVolume(topo, option)
+    vid := topo.NextVolumeId()
+    vg.grow(grpcDialOption, topo, vid, option, servers...)
+    return len(servers)
 }
 
 // 目前不清楚这个函数的作用
@@ -51,24 +45,19 @@ func (vg *VolumeGrowth) findEmptySlotsForOneVolume(topo *Topology, option *Volum
 func (vg *VolumeGrowth) grow(grpcDialOption grpc.DialOption, topo *Topology, vid storage.VolumeId, option *VolumeGrowOption, servers ...*DataNode) error {
     for _, server := range servers {
         // 调用 volume service 分配 volume
-        if err := AllocateVolume(server, grpcDialOption, vid, option); err == nil {
-            vi := storage.VolumeInfo{
-                Id:               vid,
-                Size:             0,
-                Collection:       option.Collection,
-                ReplicaPlacement: option.ReplicaPlacement,
-                Ttl:              option.Ttl,
-                Version:          storage.CurrentVersion,
-            }
-            server.AddOrUpdateVolume(vi)
-            topo.RegisterVolumeLayout(vi, server)
-            glog.V(0).Infoln("Created Volume", vid, "on", server.NodeImpl.String())
-        } else {
-            glog.V(0).Infoln("Failed to assign volume", vid, "to", servers, "error", err)
-            return fmt.Errorf("Failed to assign %d: %v", vid, err)
+        AllocateVolume(server, grpcDialOption, vid, option)
+        vi := storage.VolumeInfo{
+            Id:               vid,
+            Size:             0,
+            Collection:       option.Collection,
+            ReplicaPlacement: option.ReplicaPlacement,
+            Ttl:              option.Ttl,
+            Version:          storage.CurrentVersion,
         }
+        server.AddOrUpdateVolume(vi)
+        topo.RegisterVolumeLayout(vi, server)
     }
-    return nil
+    return
 }
 
 // 神奇的函数，输入 ReplicaPlacement.GetCopyCount() 得到volume数量
@@ -92,11 +81,8 @@ func (vg *VolumeGrowth) findVolumeCount(copyCount int) (count int) {
 // Volume Server
 
 // Volume Server grpc api
-func (vs *VolumeServer) AllocateVolume(ctx context.Context, req *volume_server_pb.AllocateVolumeRequest) (*volume_server_pb.AllocateVolumeResponse, error) {
-
-    resp := &volume_server_pb.AllocateVolumeResponse{}
-
-    err := vs.store.AddVolume(
+func (vs *VolumeServer) AllocateVolume(ctx context.Context, req *volume_server_pb.AllocateVolumeRequest) {
+    vs.store.AddVolume(
         storage.VolumeId(req.VolumeId),
         req.Collection,
         vs.needleMapKind,
@@ -104,40 +90,25 @@ func (vs *VolumeServer) AllocateVolume(ctx context.Context, req *volume_server_p
         req.Ttl,
         req.Preallocate,
     )
-
-    return resp, err
 }
 
 func (s *Store) AddVolume(volumeId VolumeId, collection string, needleMapKind NeedleMapType, replicaPlacement string, ttlString string, preallocate int64) error {
     // replicaPlacement 是一个长度为3的字符串
     // 每一位都是一个 0-9 的数字
-    rt, e := NewReplicaPlacementFromString(replicaPlacement)
-    if e != nil {
-        return e
-    }
-    ttl, e := ReadTTL(ttlString)
-    if e != nil {
-        return e
-    }
-    e = s.addVolume(volumeId, collection, needleMapKind, rt, ttl, preallocate)
-    return e
+    rt := NewReplicaPlacementFromString(replicaPlacement)
+    ttl := ReadTTL(ttlString)
+    return s.addVolume(volumeId, collection, needleMapKind, rt, ttl, preallocate)
 }
 
 func (s *Store) addVolume(vid VolumeId, collection string, needleMapKind NeedleMapType, replicaPlacement *ReplicaPlacement, ttl *TTL, preallocate int64) error {
     if s.findVolume(vid) != nil {
-        return fmt.Errorf("Volume Id %d already exists!", vid)
+        return
     }
     // 找到 (location.MaxVolumeCount - location.VolumesLen()) 值最大的 Location
-    if location := s.FindFreeLocation(); location != nil {
-        if volume, err := NewVolume(location.Directory, collection, vid, needleMapKind, replicaPlacement, ttl, preallocate); err == nil {
-            location.SetVolume(vid, volume)
-            s.NewVolumeIdChan <- vid
-            return nil
-        } else {
-            return err
-        }
-    }
-    return fmt.Errorf("No more free space left")
+    location := s.FindFreeLocation()
+    volume = NewVolume(location.Directory, collection, vid, needleMapKind, replicaPlacement, ttl, preallocate)
+    location.SetVolume(vid, volume)
+    s.NewVolumeIdChan <- vid
 }
 
 func (s *Store) findVolume(vid VolumeId) *Volume {
@@ -158,8 +129,12 @@ func NewVolume(dirname string, collection string, id VolumeId, needleMapKind Nee
     return
 }
 
-func (v *Volume) load(alsoLoadIndex bool, createDatIfMissing bool, needleMapKind NeedleMapType, preallocate int64) error {
-    var e error
+func (v *Volume) load(
+    alsoLoadIndex bool,
+    createDatIfMissing bool,
+    needleMapKind NeedleMapType,
+    preallocate int64) error {
+
     fileName := v.FileName()
     alreadyHasSuperBlock := false
 
@@ -167,40 +142,31 @@ func (v *Volume) load(alsoLoadIndex bool, createDatIfMissing bool, needleMapKind
     alreadyHasSuperBlock = exists && fileSize >= _SuperBlockSize
     if !exists {
         if !createDatIfMissing {
-            return fmt.Errorf("Volume Data file %s.dat does not exist.", fileName)
+            return
         }
-        v.dataFile, e = createVolumeFile(fileName+".dat", preallocate)
-        if e != nil {
-            return e
-        }
+        v.dataFile = createVolumeFile(fileName+".dat", preallocate)
     }
 
     if alreadyHasSuperBlock {
-        e = v.readSuperBlock()
+        v.readSuperBlock()
     } else {
-        e = v.maybeWriteSuperBlock()
+        v.maybeWriteSuperBlock()
     }
-    if e != nil || alsoLoadIndex {
-        return e
+    if alsoLoadIndex {
+        return nil
     }
     var indexFile *os.File
     if v.readOnly {
-        indexFile, e = os.OpenFile(fileName+".idx", os.O_RDONLY, 0644)
-        if e != nil {
-            return e
-        }
+        indexFile = os.OpenFile(fileName+".idx", os.O_RDONLY, 0644)
     } else {
-        indexFile, e = os.OpenFile(fileName+".idx", os.O_RDWR|os.O_CREATE, 0644)
-        if e != nil {
-            return e
-        }
+        indexFile = os.OpenFile(fileName+".idx", os.O_RDWR|os.O_CREATE, 0644)
     }
     v.readOnly = CheckVolumeDataIntegrity(v, indexFile) != nil
     switch needleMapKind {
     case NeedleMapInMemory:
-        v.nm, e = LoadCompactNeedleMap(indexFile)
+        v.nm = LoadCompactNeedleMap(indexFile)
     }
-    return e
+    return
 }
 ```
 
