@@ -260,3 +260,22 @@ some fields: [name, mime, last_modified_date, ttl, pairs]
 ### Filer
 
 #### File ID
+
+``` go
+type FileId struct {
+    VolumeId VolumeId       // uint32, 等同于 idx/dat 文件名
+    Key      types.NeedleId // uint64
+    Cookie   types.Cookie   // uint32
+}
+
+func (t *Topology) PickForWrite(count uint64, option *VolumeGrowOption) (string, uint64, *DataNode, error) {
+    vid, count, datanodes, err := t.GetVolumeLayout(option.Collection, option.ReplicaPlacement, option.Ttl).PickForWrite(count, option)
+    if err != nil || datanodes.Length() == 0 {
+        return "", 0, nil, errors.New("No writable volumes available!")
+    }
+    // FIXME: fileId 实际是 needleId
+    fileId, count := t.Sequence.NextFileId(count)
+    return storage.NewFileId(*vid, fileId, rand.Uint32()).String(), count, datanodes.Head(), nil
+}
+
+```
