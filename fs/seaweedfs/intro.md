@@ -237,6 +237,8 @@ es: extra size
 
 #### Needle
 
+##### Index
+
 参考 `volume_read_write.go:(*Volume).writeNeedle`, `volume_read_write.go:(*Volume).readNeedle`
 
 以 `Version3` 为🌰
@@ -254,18 +256,20 @@ type Offset struct {
 
 ```
 
-``` go
+##### Data
 
+``` go
+R: required, O: optional
 ----------┬-------------------------------------------------------------------------------┐
-          |    0    |    1    |    2    |    3    |    4    |    5    |    6    |    7    |
-          ├-------------------------------------------------------------------------------┤
- required | cookie                                | needle id part 0                      |
-          | needle id part 1                      | size                                  |
+R/O|Offset|    0    |    1    |    2    |    3    |    4    |    5    |    6    |    7    |
 ----------┼-------------------------------------------------------------------------------┤
-          | data_size: len(needle.data)           | needle.data                           |
-          | flag    | some fields                                                         |
- optional | current_timestamp                                                             |
-          | checksum                              | padding                               |
+R  | 0    | cookie                                | needle id part 0                      |
+R  | 8    | needle id part 1                      | size                                  |
+----------┼-------------------------------------------------------------------------------┤
+O  |16    | data_size: len(needle.data)           | needle.data                           |
+O  |      | flag    | some fields                                                         |
+O  |      | current_timestamp                                                             |
+O  |      | checksum                              | padding                               |
 ----------┴-------------------------------------------------------------------------------┘
 
 size: 数据部分总长度，及 optional 部分
