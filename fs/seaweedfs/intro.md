@@ -168,6 +168,35 @@ func (v *Volume) load(
     }
     return
 }
+
+func LoadCompactNeedleMap(file *os.File) (*NeedleMap, error) {
+    nm := NewCompactNeedleMap(file)
+    return doLoading(file, nm)
+}
+
+func doLoading(file *os.File, nm *NeedleMap) (*NeedleMap, error) {
+    e := WalkIndexFile(file, func(key types.NeedleId, offset types.Offset, size uint32) error {
+        nm.MaybeSetMaxFileKey(key)
+        // 更新文件数量及大小； 如果key(needle id) 已经存在，则将原来的文件标记为已删除
+        // 同时更新已删除信息
+        if !offset.IsZero() && size != types.TombstoneFileSize {
+            nm.FileCounter++
+            nm.FileByteCounter = nm.FileByteCounter + uint64(size)
+            oldOffset, oldSize := nm.m.Set(types.NeedleId(key), offset, size)
+            if !oldOffset.IsZero() && oldSize != types.TombstoneFileSize {
+                nm.DeletionCounter++
+                nm.DeletionByteCounter = nm.DeletionByteCounter + uint64(oldSize)
+            }
+        } else {
+            oldSize := nm.m.Delete(types.NeedleId(key))
+            nm.DeletionCounter++
+            nm.DeletionByteCounter = nm.DeletionByteCounter + uint64(oldSize)
+        }
+        return nil
+    })
+    return nm, e
+}
+
 ```
 
 ## 数据结构
@@ -279,3 +308,5 @@ func (t *Topology) PickForWrite(count uint64, option *VolumeGrowOption) (string,
 }
 
 ```
+
+
