@@ -1,4 +1,4 @@
-# Vaccum
+# Vacuum
 
 `curl http://master:9333/vol/vacuum?garbageThreshold=0.001` 是 `seaweedfs` 的垃圾回收接口。
 
