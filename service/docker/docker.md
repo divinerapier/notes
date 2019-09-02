@@ -15,4 +15,6 @@ $ docker-compose stop service_name(not container's name) [...]
 
 ## Log Monitor
 
+``` sh
 $ while (true); do \sleep 1 && docker logs -f container_name; done;
+```
