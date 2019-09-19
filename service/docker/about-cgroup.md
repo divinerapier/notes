@@ -33,8 +33,8 @@ int main() {
 package main
 
 import (
-	"fmt"
-	"time"
+    "fmt"
+    "time"
 )
 
 func main() {
@@ -100,6 +100,3 @@ $ docker container run -d --memory=5m --memory-swap=10m [--oom-kill-disable] ima
   执行一段时间，会结束进程(未退出容器)。出现过两种错误: `Killed`, `Segmentation fault`。没有出现过 `panic`。
 4. go --oom-kill-disable
   同 `c --oom-kill-disable`
- 
-
-)
