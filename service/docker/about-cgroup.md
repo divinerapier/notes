@@ -55,10 +55,38 @@ func main() {
     }
 }
 ```
+## Dockerfile
+
+``` dockerfile
+FROM gcc:4.9
+
+COPY . /usr/src/myapp
+WORKDIR /usr/src/myapp
+RUN ls /usr/src/
+RUN ls /usr/src/myapp
+RUN gcc -o myapp main.c
+```
+
+``` dockerfile
+FROM golang:1.13
+
+COPY . /usr/local/go/src/myapp
+WORKDIR /usr/local/go/src/myapp
+RUN ls /usr/local/go/src/myapp
+RUN go build -o myapp main.go
+```
+
+## Run
 
 ``` bash
 # --oom-kill-disable: 为可选参数，两个镜像，是否有 '--oom-kill-disable' 共四个测试用例
+
+# 启动容器，设置内存限制
 $ docker container run -d --memory=5m --memory-swap=10m [--oom-kill-disable] image-cgroup-c sleep 1000000000000
+# 进入容器执行
+$ ./myapp
+
+# 同上
 $ docker container run -d --memory=5m --memory-swap=10m [--oom-kill-disable] image-cgroup-go sleep 1000000000000
 ```
 
