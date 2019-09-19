@@ -92,11 +92,13 @@ $ docker container run -d --memory=5m --memory-swap=10m [--oom-kill-disable] ima
 
 ## Phenomenon
 
-1. c 
+1. `c`   
   执行一段时间，会直接退出容器。
-2. c --oom-kill-disable
+2. `c --oom-kill-disable`   
   执行一段时间，程序停住。如果同时执行两个进程，在都停住后，杀死一个，另一个会继续执行。
-3. go
+3. `go`   
   执行一段时间，会结束进程(未退出容器)。出现过两种错误: `Killed`, `Segmentation fault`。没有出现过 `panic`。
-4. go --oom-kill-disable
+4. `go --oom-kill-disable`   
   同 `c --oom-kill-disable`
+
+*内存分配失败的日志都没有出现*
