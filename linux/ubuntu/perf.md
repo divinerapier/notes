@@ -26,5 +26,5 @@ $ cargo install flamegraph
 
 ## Reference
 
-[Install perf on linux](https://stackoverflow.com/questions/39456308/i-cant-run-the-perf-command-perf-is-a-linux-profiler-for-stack-traces)
-[Rust flamegraph](https://github.com/ferrous-systems/flamegraph)
++ [Install perf on linux](https://stackoverflow.com/questions/39456308/i-cant-run-the-perf-command-perf-is-a-linux-profiler-for-stack-traces)
++ [Rust flamegraph](https://github.com/ferrous-systems/flamegraph)
