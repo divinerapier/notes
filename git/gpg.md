@@ -2,7 +2,7 @@
 
 ## Install
 
-On MacOS
+### On MacOS
 
 ``` sh
 $ brew install pinentry-mac gpg2
@@ -10,12 +10,26 @@ $ touch  ~/.gnupg/gpg-agent.conf
 $ echo "pinentry-program /usr/local/bin/pinentry-mac" >> ~/.gnupg/gpg-agent.conf
 ```
 
+### On Ubuntu
+
+``` bash
+$ sudo apt install gunpg2
+```
+
 ## Generate key
 
 ### Generate key
 
+macos
+
 ``` sh
 $ gpg --full-gen-key
+```
+
+ubuntu
+
+``` bash
+$ gpg2 --full-gen-key
 ```
 
 ### Configure 
