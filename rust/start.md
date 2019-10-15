@@ -23,8 +23,8 @@ $ rustup component add cargo clippy llvm-tools-preview rust-analysis rust-docs r
 
 [vscode-remote-extensionpack](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack)
 
-优点: 类型推断更准确，能跳转更多的宏定义。
-缺点: 启动略慢，如果程序无法编译，可能会消耗大量内存来分析(最后结果就是 OOM 被干掉，很蠢)
+优点: 类型推断更准确，能跳转更多的宏定义。   
+缺点: 启动略慢，如果程序无法编译，可能会消耗大量内存来分析(最后结果就是 OOM 被干掉，很蠢)   
 
 #### RLS
 
@@ -33,14 +33,14 @@ $ rustup component add rls rust-analysis rust-src
 ```
 
 [vscode-rls](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust)
-
-优点: 资源占用较小
-缺点: 能力比 `rust-analyzer` 弱
+ 
+优点: 资源占用较小   
+缺点: 能力比 `rust-analyzer` 弱   
 
 ### Clion
 
 `Plugin` 搜索 `rust` 插件并安装。
 
-优点: 跳转，代码提示都还不错。
-缺点: 用着不舒服。
+优点: 跳转，代码提示都还不错。   
+缺点: 用着不舒服。   
 
