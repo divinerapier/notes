@@ -68,8 +68,16 @@ $ git config --local commit.gpgSign true
 $ echo "no-tty" >> ~/.gnupg/gpg.conf
 ```
 
+## FAQ
+
+1. gpg: signing failed: Inappropriate ioctl for device
+
+``` bash
+$ echo "export GPG_TTY=$(tty)" >> ~/.bashrc
+```
+
 ## Reference
 
 1. https://help.github.com/en/articles/telling-git-about-your-signing-key   
 2. https://ducfilan.wordpress.com/2017/03/10/the-git-error-gpg-failed-to-sign-the-data/
-
+3. https://www.jianshu.com/p/2ed292ae2365
