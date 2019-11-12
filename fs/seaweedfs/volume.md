@@ -287,3 +287,18 @@ func (l *DiskLocation) loadExistingVolume(dir os.FileInfo, needleMapKind NeedleM
 	}
 }
 ```
+
+`NewVolume` 函数才是真正加载一个 `volume` 的地方。
+
+``` go
+// dirname: volume 物理文件夹
+// collection: 可以理解为 bucket
+func NewVolume(dirname string, collection string, id VolumeId, needleMapKind NeedleMapType, replicaPlacement *ReplicaPlacement, ttl *TTL, preallocate int64) (v *Volume, e error) {
+	// if replicaPlacement is nil, the superblock will be loaded from disk
+	v = &Volume{dir: dirname, Collection: collection, Id: id}
+	v.SuperBlock = SuperBlock{ReplicaPlacement: replicaPlacement, Ttl: ttl}
+	v.needleMapKind = needleMapKind
+	e = v.load(true /*alsoLoadIndex*/, true /*createDatIfMissing*/, needleMapKind, preallocate)
+	return
+}
+```
