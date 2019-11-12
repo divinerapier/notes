@@ -213,3 +213,77 @@ func NewStore(port int, ip, publicUrl string, dirnames []string, maxVolumeCounts
 }
 ```
 
+``` go
+func NewDiskLocation(dir string, maxVolumeCount int) *DiskLocation {
+	location := &DiskLocation{Directory: dir, MaxVolumeCount: maxVolumeCount}
+	location.volumes = make(map[VolumeId]*Volume)
+	return location
+}
+```
+
+``` go
+func (l *DiskLocation) loadExistingVolumes(needleMapKind NeedleMapType) {
+	l.Lock()
+	defer l.Unlock()
+
+	l.concurrentLoadingVolumes(needleMapKind, 10)
+
+	glog.V(0).Infoln("Store started on dir:", l.Directory, "with", len(l.volumes), "volumes", "max", l.MaxVolumeCount)
+}
+```
+
+``` go
+func (l *DiskLocation) concurrentLoadingVolumes(needleMapKind NeedleMapType, concurrency int) {
+
+	task_queue := make(chan os.FileInfo, 10*concurrency)
+	go func() {
+		if dirs, err := ioutil.ReadDir(l.Directory); err == nil {
+			for _, dir := range dirs { // 称为 entry 更合适，这里既包含目录(dir)也包含文件(regular file)
+				task_queue <- dir
+			}
+		}
+		close(task_queue)
+	}()
+
+	var wg sync.WaitGroup
+	var mutex sync.RWMutex
+	for workerNum := 0; workerNum < concurrency; workerNum++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for dir := range task_queue {
+				l.loadExistingVolume(dir, needleMapKind, &mutex)
+			}
+		}()
+	}
+	wg.Wait()
+
+}
+```
+
+``` go
+func (l *DiskLocation) loadExistingVolume(dir os.FileInfo, needleMapKind NeedleMapType, mutex *sync.RWMutex) {
+	name := dir.Name()
+	if !dir.IsDir() && strings.HasSuffix(name, ".dat") {
+		// volumeIdFromPath: (不展开该函数了) filter 保留 .dat 类型的文件 
+		// (volume 有两种类型文件 .data(数据)， .idx(索引))
+		vid, collection, err := l.volumeIdFromPath(dir)
+		if err == nil {
+			mutex.RLock()
+			_, found := l.volumes[vid]
+			mutex.RUnlock()
+			if !found {
+				if v, e := NewVolume(l.Directory, collection, vid, needleMapKind, nil, nil, 0); e == nil {
+					mutex.Lock()
+					l.volumes[vid] = v
+					mutex.Unlock()
+					glog.V(0).Infof("data file %s, replicaPlacement=%s v=%d size=%d ttl=%s",
+						l.Directory+"/"+name, v.ReplicaPlacement, v.Version(), v.Size(), v.Ttl.String())
+				} else {
+					glog.V(0).Infof("new volume %s error %s", name, e)
+				}
+			}
+		}
+	}
+}
+```
