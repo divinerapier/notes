@@ -292,7 +292,7 @@ func (l *DiskLocation) loadExistingVolume(dir os.FileInfo, needleMapKind NeedleM
 
 ``` go
 // dirname: volume 物理文件夹
-// collection: 可以理解为 bucket
+// collection: 可以理解为 bucket, 会作为 `volume` 文件名的一部分。
 func NewVolume(dirname string, collection string, id VolumeId, needleMapKind NeedleMapType, replicaPlacement *ReplicaPlacement, ttl *TTL, preallocate int64) (v *Volume, e error) {
 	// if replicaPlacement is nil, the superblock will be loaded from disk
 	v = &Volume{dir: dirname, Collection: collection, Id: id}
@@ -300,5 +300,115 @@ func NewVolume(dirname string, collection string, id VolumeId, needleMapKind Nee
 	v.needleMapKind = needleMapKind
 	e = v.load(true /*alsoLoadIndex*/, true /*createDatIfMissing*/, needleMapKind, preallocate)
 	return
+}
+```
+
+``` go
+func (v *Volume) load(alsoLoadIndex bool, createDatIfMissing bool, needleMapKind NeedleMapType, preallocate int64) error {
+	var e error
+	fileName := v.FileName()
+	alreadyHasSuperBlock := false
+
+	// 校验文件存在，权限等
+	if exists, canRead, canWrite, modifiedTime, fileSize := checkFile(fileName + ".dat"); exists {
+		if !canRead {
+			return fmt.Errorf("cannot read Volume Data file %s.dat", fileName)
+		}
+		if canWrite {
+			v.dataFile, e = os.OpenFile(fileName+".dat", os.O_RDWR|os.O_CREATE, 0644)
+			v.lastModifiedTime = uint64(modifiedTime.Unix())
+		} else {
+			v.dataFile, e = os.Open(fileName + ".dat")
+			v.readOnly = true
+		}
+		// 假设，文件大小 > 8Bytes 时，包含 SuperBlock(因为 SuperBlock 的大小为 8Bytes, 创建时会)
+		if fileSize >= _SuperBlockSize /*8Bytes*/ {
+			alreadyHasSuperBlock = true
+		}
+	} else {
+		if createDatIfMissing {
+			v.dataFile, e = createVolumeFile(fileName+".dat", preallocate)
+		} else {
+			return fmt.Errorf("Volume Data file %s.dat does not exist.", fileName)
+		}
+	}
+
+	if alreadyHasSuperBlock {
+		e = v.readSuperBlock()
+	} else {
+		e = v.maybeWriteSuperBlock()
+	}
+	if e == nil && alsoLoadIndex {
+		var indexFile *os.File
+		if v.readOnly {
+			indexFile, _ = os.OpenFile(fileName+".idx", os.O_RDONLY, 0644)
+		} else {
+			indexFile, _ = os.OpenFile(fileName+".idx", os.O_RDWR|os.O_CREATE, 0644)
+		}
+		// 校验索引文件
+		if e = CheckVolumeDataIntegrity(v, indexFile); e != nil {
+			v.readOnly = true
+		}
+		switch needleMapKind {
+		case NeedleMapInMemory: // 默认类型
+			glog.V(0).Infoln("loading index", fileName+".idx", "to memory readonly", v.readOnly)
+			// 加载索引文件
+			v.nm, _ = LoadCompactNeedleMap(indexFile)
+		case NeedleMapLevelDb:
+			opts := &opt.Options{
+				BlockCacheCapacity: 2 * 1024 * 1024, // default value is 8MiB
+				WriteBuffer:        1 * 1024 * 1024, // default value is 4MiB
+			}
+			v.nm, _ = NewLevelDbNeedleMap(fileName+".ldb", indexFile, opts)
+		case NeedleMapLevelDbMedium:
+			opts := &opt.Options{
+				BlockCacheCapacity: 4 * 1024 * 1024, // default value is 8MiB
+				WriteBuffer:        2 * 1024 * 1024, // default value is 4MiB
+			}
+			v.nm, _ = NewLevelDbNeedleMap(fileName+".ldb", indexFile, opts)
+		case NeedleMapLevelDbLarge:
+			opts := &opt.Options{
+				BlockCacheCapacity: 8 * 1024 * 1024, // default value is 8MiB
+				WriteBuffer:        4 * 1024 * 1024, // default value is 4MiB
+			}
+			v.nm, _ = NewLevelDbNeedleMap(fileName+".ldb", indexFile, opts)
+		}
+	}
+
+	return e
+}
+```
+
+``` go
+
+func CheckVolumeDataIntegrity(v *Volume, indexFile *os.File) error {
+	var indexSize int64
+	var e error
+	// 校验长度使用合法 (因为 index 的每一条记录为定长(16 Bytes)，所以文件大小应为16的整数倍)
+	if indexSize, e = verifyIndexFileIntegrity(indexFile); e != nil {
+		return fmt.Errorf("verifyIndexFileIntegrity %s failed: %v", indexFile.Name(), e)
+	}
+	if indexSize == 0 {
+		return nil
+	}
+	var lastIdxEntry []byte
+	// 读取最后一个 index 的内容, // IdxFileEntry 和 readIndexEntryAtOffset 应该作为一个函数
+	if lastIdxEntry, e = readIndexEntryAtOffset(indexFile, indexSize-NeedleEntrySize); e != nil {
+		return fmt.Errorf("readLastIndexEntry %s failed: %v", indexFile.Name(), e)
+	}
+	// key:    type = NeedleId, size = 8,  [0, 8)
+	// offset: type = Offset,   size = 4   [8, 12)  表示以 8 Bytes(对齐单位) 为单位的偏移量
+	// size:   type = uint32,   size = 4   [12, 16) 表示 NeedleBody 的实际大小，实际读取大小为 Header + Body + 填充
+	key, offset, size := IdxFileEntry(lastIdxEntry)
+	// 第一个 Needle 的 Offset 应该为 8 (SuperBlock)
+	if offset.IsZero() || size == TombstoneFileSize {
+		return nil
+	}
+	// 检验最后一个needle的数据
+	if e = verifyNeedleIntegrity(v.dataFile, v.Version(), offset.ToAcutalOffset(), key, size); e != nil {
+		return fmt.Errorf("verifyNeedleIntegrity %s failed: %v", indexFile.Name(), e)
+	}
+
+	return nil
 }
 ```
