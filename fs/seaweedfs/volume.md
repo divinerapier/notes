@@ -172,5 +172,16 @@ func NewVolumeServer(adminMux, publicMux *http.ServeMux, ip string,
 }
 ```
 
-
+函数 `NewVolumeServer` 包含：  
+1. 读取本地已有 `volume`： `storage.NewStore`;
+2. 构建主要服务 `HTTP API`
+	``` go
+	adminMux.HandleFunc("/", vs.privateStoreHandler)
+	if publicMux != adminMux {
+		// separated admin and public port
+		handleStaticResources(publicMux)
+		publicMux.HandleFunc("/", vs.publicReadOnlyHandler)
+	}
+	```
+3. 发送心跳包到 `master service`
 
