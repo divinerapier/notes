@@ -183,5 +183,5 @@ func NewVolumeServer(adminMux, publicMux *http.ServeMux, ip string,
 		publicMux.HandleFunc("/", vs.publicReadOnlyHandler)
 	}
 	```
-3. 发送心跳包到 `master service`
+3. 发送心跳包到 `master service`: `go vs.heartbeat()`
 
