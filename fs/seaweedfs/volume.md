@@ -112,7 +112,7 @@ func (v VolumeServerOptions) startVolumeServer(volumeFolders, maxVolumeCounts, v
 }
 ```
 
-在这个函数内包含了，读取配置，生成启动参数，启动 `http/https` 及 `grpc` 服务。`http` 服务的 `API` 由 `adminMux` 及 `publicMux` 组成，在函数 `NewVolumeServer` 中定义。
+在这个函数内包含了，读取配置，生成启动参数，定义索引类型，启动 `http/https` 及 `grpc` 服务。`http` 服务的 `API` 由 `adminMux` 及 `publicMux` 组成，在函数 `NewVolumeServer` 中定义。
 
 ``` go
 
@@ -184,4 +184,32 @@ func NewVolumeServer(adminMux, publicMux *http.ServeMux, ip string,
 	}
 	```
 3. 发送心跳包到 `master service`: `go vs.heartbeat()`
+
+
+## Load Volume
+
+`seaweedfs` 中有关文件系统的代码都在 `weed/storage` 目录中，从 `weed/storage/store.go` 的 `NewStore` 函数开始。
+
+``` go
+
+// NewStore 后端存储对象管理者
+// publicUrl: 上传使用
+// dirnames: 存储数据目录
+// maxVolumeCounts: 目录下最大 volume 数
+// needleMapKind: 索引存储类型(默认使用内存)
+func NewStore(port int, ip, publicUrl string, dirnames []string, maxVolumeCounts []int, needleMapKind NeedleMapType) (s *Store) {
+	s = &Store{Port: port, Ip: ip, PublicUrl: publicUrl, NeedleMapType: needleMapKind}
+	s.Locations = make([]*DiskLocation, 0)
+	for i := 0; i < len(dirnames); i++ {
+		// Location 表示对一个目录的抽象，每个目录可以有多个 volume (数量由 maxVolumeCounts 限制)
+		location := NewDiskLocation(dirnames[i], maxVolumeCounts[i])
+		// 加载已有数据
+		location.loadExistingVolumes(needleMapKind)
+		s.Locations = append(s.Locations, location)
+	}
+	s.NewVolumeIdChan = make(chan VolumeId, 3)
+	s.DeletedVolumeIdChan = make(chan VolumeId, 3)
+	return
+}
+```
 
