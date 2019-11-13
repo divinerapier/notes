@@ -417,6 +417,8 @@ func CheckVolumeDataIntegrity(v *Volume, indexFile *os.File) error {
 
 `Seaweedfs` 有关服务处理相关的代码在 `weed/server` 目录中。 `volume api` 的入口在 `weed/server/volume_server_handlers.go` 文件中。 
 
+### Write
+
 ``` go
 func (vs *VolumeServer) privateStoreHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
