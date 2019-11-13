@@ -634,3 +634,139 @@ func distributedOperation(masterNode string, store *storage.Store, volumeId stor
 	}
 }
 ```
+
+### Read
+
+``` go
+
+func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request) {
+	n := new(storage.Needle)
+	vid, fid, filename, ext, _ := parseURLPath(r.URL.Path)
+	volumeId, err := storage.NewVolumeId(vid)
+	if err != nil {
+		glog.V(2).Infoln("parsing error:", err, r.URL.Path)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	err = n.ParsePath(fid)
+	if err != nil {
+		glog.V(2).Infoln("parsing fid error:", err, r.URL.Path)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	glog.V(4).Infoln("volume", volumeId, "reading", n)
+	if !vs.store.HasVolume(volumeId) {
+		// 如果目标 volume 不在当前服务，根据是否启用重定向读
+		// 启用:
+		//     去 master 查询目标 volume 所在位置，重定向请求
+		//
+		// 未启用:
+		//     返回 404
+		if !vs.ReadRedirect {
+			glog.V(2).Infoln("volume is not local:", err, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		lookupResult, err := operation.Lookup(vs.GetMaster(), volumeId.String())
+		glog.V(2).Infoln("volume", volumeId, "found on", lookupResult, "error", err)
+		if err == nil && len(lookupResult.Locations) > 0 {
+			u, _ := url.Parse(util.NormalizeUrl(lookupResult.Locations[0].PublicUrl))
+			u.Path = r.URL.Path
+			arg := url.Values{}
+			if c := r.FormValue("collection"); c != "" {
+				arg.Set("collection", c)
+			}
+			u.RawQuery = arg.Encode()
+			//
+			http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
+
+		} else {
+			glog.V(2).Infoln("lookup error:", err, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+		return
+	}
+	// 读取数据并校验
+	cookie := n.Cookie
+	count, e := vs.store.ReadVolumeNeedle(volumeId, n)
+	glog.V(4).Infoln("read bytes", count, "error", e)
+	if e != nil || count < 0 {
+		glog.V(0).Infof("read %s error: %v", r.URL.Path, e)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if n.Cookie != cookie {
+		glog.V(0).Infof("request %s with cookie:%x expected:%x from %s agent %s", r.URL.Path, cookie, n.Cookie, r.RemoteAddr, r.UserAgent())
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if n.LastModified != 0 {
+		w.Header().Set("Last-Modified", time.Unix(int64(n.LastModified), 0).UTC().Format(http.TimeFormat))
+		if r.Header.Get("If-Modified-Since") != "" {
+			if t, parseError := time.Parse(http.TimeFormat, r.Header.Get("If-Modified-Since")); parseError == nil {
+				if t.Unix() >= int64(n.LastModified) {
+					w.WriteHeader(http.StatusNotModified)
+					return
+				}
+			}
+		}
+	}
+	if inm := r.Header.Get("If-None-Match"); inm == "\""+n.Etag()+"\"" {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	if r.Header.Get("ETag-MD5") == "True" {
+		setEtag(w, n.MD5())
+	} else {
+		setEtag(w, n.Etag())
+	}
+
+	if n.HasPairs() {
+		pairMap := make(map[string]string)
+		err = json.Unmarshal(n.Pairs, &pairMap)
+		if err != nil {
+			glog.V(0).Infoln("Unmarshal pairs error:", err)
+		}
+		for k, v := range pairMap {
+			w.Header().Set(k, v)
+		}
+	}
+
+	if vs.tryHandleChunkedFile(n, filename, w, r) {
+		return
+	}
+
+	if n.NameSize > 0 && filename == "" {
+		filename = string(n.Name)
+		if ext == "" {
+			ext = path.Ext(filename)
+		}
+	}
+	mtype := ""
+	if n.MimeSize > 0 {
+		mt := string(n.Mime)
+		if !strings.HasPrefix(mt, "application/octet-stream") {
+			mtype = mt
+		}
+	}
+
+	if ext != ".gz" {
+		if n.IsGzipped() {
+			if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+				w.Header().Set("Content-Encoding", "gzip")
+			} else {
+				if n.Data, err = operation.UnGzipData(n.Data); err != nil {
+					glog.V(0).Infoln("ungzip error:", err, r.URL.Path)
+				}
+			}
+		}
+	}
+
+	rs := conditionallyResizeImages(bytes.NewReader(n.Data), ext, r)
+
+	if e := writeResponseContent(filename, mtype, rs, w, r); e != nil {
+		glog.V(2).Infoln("response write error:", e)
+	}
+}
+```
