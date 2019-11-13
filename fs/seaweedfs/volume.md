@@ -447,12 +447,15 @@ func (vs *VolumeServer) PostHandler(w http.ResponseWriter, r *http.Request) {
 		writeJsonError(w, r, http.StatusBadRequest, e)
 		return
 	}
-
+	
+	// url 的形式为: http://host:port/vid,fid (忽略 collection 等不重要的信息)
 	vid, fid, _, _, _ := parseURLPath(r.URL.Path)
+	// vid 为字符串， volumeId 为 uint32
 	volumeId, _ := storage.NewVolumeId(vid)
-
+	// jwt 校验
 	vs.maybeCheckJwtAuthorization(r, vid, fid)
-
+	
+	// 从 http request 中读取一些文件的 meta
 	needle, originalSize, _ := storage.CreateNeedleFromRequest(r, vs.FixJpgOrientation)
 
 	ret := operation.UploadResult{}
@@ -469,3 +472,165 @@ func (vs *VolumeServer) PostHandler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
+``` go
+func CreateNeedleFromRequest(r *http.Request, fixJpgOrientation bool) (n *Needle, originalSize int, e error) {
+	var pairMap map[string]string
+	fname, mimeType, isGzipped, isChunkedFile := "", "", false, false
+	n = new(Needle)
+	fname, n.Data, mimeType, pairMap, isGzipped, originalSize, n.LastModified, n.Ttl, isChunkedFile, e = ParseUpload(r)
+	if len(fname) < 256 {
+		n.Name = []byte(fname)
+		n.SetHasName()
+	}
+	if len(mimeType) < 256 {
+		n.Mime = []byte(mimeType)
+		n.SetHasMime()
+	}
+	if len(pairMap) != 0 {
+		trimmedPairMap := make(map[string]string)
+		for k, v := range pairMap {
+			trimmedPairMap[k[len(PairNamePrefix):]] = v
+		}
+
+		pairs, _ := json.Marshal(trimmedPairMap)
+		if len(pairs) < 65536 {
+			n.Pairs = pairs
+			n.PairsSize = uint16(len(pairs))
+			n.SetHasPairs()
+		}
+	}
+	if isGzipped {
+		n.SetGzipped()
+	}
+	if n.LastModified == 0 {
+		n.LastModified = uint64(time.Now().Unix())
+	}
+	n.SetHasLastModifiedDate()
+	if n.Ttl != EMPTY_TTL {
+		n.SetHasTtl()
+	}
+
+	if isChunkedFile {
+		n.SetIsChunkManifest()
+	}
+
+	if fixJpgOrientation {
+		loweredName := strings.ToLower(fname)
+		if mimeType == "image/jpeg" || strings.HasSuffix(loweredName, ".jpg") || strings.HasSuffix(loweredName, ".jpeg") {
+			n.Data = images.FixJpgOrientation(n.Data)
+		}
+	}
+
+	n.Checksum = NewCRC(n.Data)
+
+	commaSep := strings.LastIndex(r.URL.Path, ",")
+	dotSep := strings.LastIndex(r.URL.Path, ".")
+	fid := r.URL.Path[commaSep+1:]
+	if dotSep > 0 {
+		fid = r.URL.Path[commaSep+1 : dotSep]
+	}
+
+	e = n.ParsePath(fid)
+
+	return
+}
+```
+
+``` go
+
+func ReplicatedWrite(masterNode string, s *storage.Store,
+	volumeId storage.VolumeId, needle *storage.Needle,
+	r *http.Request) (size uint32, errorStatus string) {
+
+	//check JWT
+	jwt := security.GetJwt(r)
+	// 执行完这个函数，数据就已经写入到本地 volume 中了
+	ret, _ := s.Write(volumeId, needle)
+	needToReplicate := !s.HasVolume(volumeId)
+
+
+	needToReplicate = needToReplicate || s.GetVolume(volumeId).NeedToReplicate()
+	if !needToReplicate {
+		needToReplicate = s.GetVolume(volumeId).NeedToReplicate()
+	}
+	if needToReplicate { //send to other replica locations
+		if r.FormValue("type") != "replicate" { // replica master 没有这个标记
+
+			distributedOperation(masterNode, s, volumeId, func(location operation.Location) error {
+				u := url.URL{
+					Scheme: "http",
+					Host:   location.Url,
+					Path:   r.URL.Path,
+				}
+				q := url.Values{
+					"type": {"replicate"}, // replica slaves 包含这个标记，避免重复写入
+					"ttl":  {needle.Ttl.String()},
+				}
+				if needle.LastModified > 0 {
+					q.Set("ts", strconv.FormatUint(needle.LastModified, 10))
+				}
+				if needle.IsChunkedManifest() {
+					q.Set("cm", "true")
+				}
+				u.RawQuery = q.Encode()
+
+				pairMap := make(map[string]string)
+				if needle.HasPairs() {
+					tmpMap := make(map[string]string)
+					json.Unmarshal(needle.Pairs, &tmpMap)
+					for k, v := range tmpMap {
+						pairMap[storage.PairNamePrefix+k] = v
+					}
+				}
+
+				// 向 replica 发送上传请求
+				_, err := operation.Upload(u.String(),
+					string(needle.Name), bytes.NewReader(needle.Data), needle.IsGzipped(), string(needle.Mime),
+					pairMap, jwt)
+				return err
+			})
+		}
+	}
+	size = ret
+	return
+}
+```
+
+``` go
+func distributedOperation(masterNode string, store *storage.Store, volumeId storage.VolumeId, op func(location operation.Location) error) error {
+	if lookupResult, lookupErr := operation.Lookup(masterNode, volumeId.String()); lookupErr == nil {
+		// 从 master 读取这个 volume 的所有地址, 过滤本机，循环执行回调函数
+		length := 0
+		selfUrl := store.Ip + ":" + strconv.Itoa(store.Port)
+		results := make(chan RemoteResult)
+		for _, location := range lookupResult.Locations {
+			if location.Url != selfUrl {
+				length++
+				// 每一个副本开启一个协程处理，并使用 channel 接收完成事件
+				// 副本过多会对当前服务器出口带宽造成比较大的压力
+				//
+				// GFS 的方案: Figure 2
+				//   https://static.googleusercontent.com/media/research.google.com/zh-CN//archive/gfs-sosp2003.pdf
+				//
+				go func(location operation.Location, results chan RemoteResult) {
+					results <- RemoteResult{location.Url, op(location)}
+				}(location, results)
+			}
+		}
+		ret := DistributedOperationResult(make(map[string]error))
+		for i := 0; i < length; i++ {
+			result := <-results
+			ret[result.Host] = result.Error
+		}
+		if volume := store.GetVolume(volumeId); volume != nil {
+			if length+1 < volume.ReplicaPlacement.GetCopyCount() {
+				return fmt.Errorf("replicating opetations [%d] is less than volume's replication copy count [%d]", length+1, volume.ReplicaPlacement.GetCopyCount())
+			}
+		}
+		return ret.Error()
+	} else {
+		glog.V(0).Infoln()
+		return fmt.Errorf("Failed to lookup for %d: %v", volumeId, lookupErr)
+	}
+}
+```
