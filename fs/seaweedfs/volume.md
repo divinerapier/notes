@@ -412,3 +412,60 @@ func CheckVolumeDataIntegrity(v *Volume, indexFile *os.File) error {
 	return nil
 }
 ```
+
+## HTTP API
+
+`Seaweedfs` 有关服务处理相关的代码在 `weed/server` 目录中。 `volume api` 的入口在 `weed/server/volume_server_handlers.go` 文件中。 
+
+``` go
+func (vs *VolumeServer) privateStoreHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	if _, exists := volumeServerPrivateStoreHandlerSupportMethods[r.Method]; !exists {
+		return
+	}
+	stats.VolumeServerRequestCounter.WithLabelValues(r.Method).Inc()
+	switch r.Method {
+	case "GET", "HEAD": // 读文件
+		stats.ReadRequest()
+		vs.GetOrHeadHandler(w, r)
+	case "DELETE":
+		stats.DeleteRequest()
+		vs.guard.WhiteList(vs.DeleteHandler)(w, r)
+	case "PUT", "POST": // 写文件
+		stats.WriteRequest()
+		vs.guard.WhiteList(vs.PostHandler)(w, r)
+	}
+	stats.VolumeServerRequestHistogram.WithLabelValues(r.Method).Observe(time.Since(start).Seconds())
+}
+```
+
+``` go
+
+func (vs *VolumeServer) PostHandler(w http.ResponseWriter, r *http.Request) {
+	if e := r.ParseForm(); e != nil {
+		glog.V(0).Infoln("form parse error:", e)
+		writeJsonError(w, r, http.StatusBadRequest, e)
+		return
+	}
+
+	vid, fid, _, _, _ := parseURLPath(r.URL.Path)
+	volumeId, _ := storage.NewVolumeId(vid)
+
+	vs.maybeCheckJwtAuthorization(r, vid, fid)
+
+	needle, originalSize, _ := storage.CreateNeedleFromRequest(r, vs.FixJpgOrientation)
+
+	ret := operation.UploadResult{}
+	// 多副本写入数据
+	_, _ = topology.ReplicatedWrite(vs.GetMaster(), vs.store, volumeId, needle, r)
+	httpStatus := http.StatusCreated
+	if needle.HasName() {
+		ret.Name = string(needle.Name)
+	}
+	ret.Size = uint32(originalSize)
+	ret.ETag = needle.Etag()
+	setEtag(w, ret.ETag)
+	writeJsonQuiet(w, r, httpStatus, ret)
+}
+```
+
