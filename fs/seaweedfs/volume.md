@@ -770,3 +770,61 @@ func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 ```
+
+``` go
+func (s *Store) ReadVolumeNeedle(i VolumeId, n *Needle) (int, error) {
+	if v := s.findVolume(i); v != nil {
+		return v.readNeedle(n)
+	}
+	return 0, fmt.Errorf("Volume %d not found!", i)
+}
+
+
+func (s *Store) findVolume(vid VolumeId) *Volume {
+	for _, location := range s.Locations {
+		if v, found := location.FindVolume(vid); found {
+			return v
+		}
+	}
+	return nil
+}
+
+
+// read fills in Needle content by looking up n.Id from NeedleMapper
+func (v *Volume) readNeedle(n *Needle) (int, error) {
+	nv, ok := v.nm.Get(n.Id)
+	if !ok || nv.Offset.IsZero() {
+		v.compactingWg.Wait()
+		nv, ok = v.nm.Get(n.Id)
+		if !ok || nv.Offset.IsZero() {
+			return -1, ErrorNotFound
+		}
+	}
+	if nv.Size == TombstoneFileSize {
+		return -1, errors.New("already deleted")
+	}
+	if nv.Size == 0 {
+		return 0, nil
+	}
+	err := n.ReadData(v.dataFile, nv.Offset.ToAcutalOffset(), nv.Size, v.Version())
+	if err != nil {
+		return 0, err
+	}
+	bytesRead := len(n.Data)
+	if !n.HasTtl() {
+		return bytesRead, nil
+	}
+	ttlMinutes := n.Ttl.Minutes()
+	if ttlMinutes == 0 {
+		return bytesRead, nil
+	}
+	if !n.HasLastModifiedDate() {
+		return bytesRead, nil
+	}
+	if uint64(time.Now().Unix()) < n.LastModified+uint64(ttlMinutes*60) {
+		return bytesRead, nil
+	}
+	return -1, ErrorNotFound
+}
+
+```
