@@ -223,3 +223,53 @@ func (vg *VolumeGrowth) grow(grpcDialOption grpc.DialOption, topo *Topology, vid
 	return nil
 }
 ```
+
+``` go
+func (t *Topology) PickForWrite(count uint64, option *VolumeGrowOption) (string, uint64, *DataNode, error) {
+	// 1. 使用 collection name，查找 collection，否则创建
+	// 2. 使用 replica replacement 查找 volume，否则创建
+	// 3. 
+	vid, count, datanodes, err := t.GetVolumeLayout(option.Collection, option.ReplicaPlacement, option.Ttl).PickForWrite(count, option)
+	if err != nil || datanodes.Length() == 0 {
+		return "", 0, nil, errors.New("No writable volumes available!")
+	}
+	fileId, count := t.Sequence.NextFileId(count)
+	return storage.NewFileId(*vid, fileId, rand.Uint32()).String(), count, datanodes.Head(), nil
+}
+
+
+func (vl *VolumeLayout) PickForWrite(count uint64, option *VolumeGrowOption) (*storage.VolumeId, uint64, *VolumeLocationList, error) {
+	lenWriters := len(vl.writables)
+	if option.DataCenter == "" {
+		// 随机返回一个满足条件的 volume
+		vid := vl.writables[rand.Intn(lenWriters)]
+		locationList := vl.vid2location[vid]
+		if locationList != nil {
+			return &vid, count, locationList, nil
+		}
+		return nil, 0, nil, errors.New("Strangely vid " + vid.String() + " is on no machine!")
+	}
+	// 下面可以忽略，我们没有 collection
+	var vid storage.VolumeId
+	var locationList *VolumeLocationList
+	counter := 0
+	for _, v := range vl.writables {
+		volumeLocationList := vl.vid2location[v]
+		for _, dn := range volumeLocationList.list {
+			if dn.GetDataCenter().Id() == NodeId(option.DataCenter) {
+				if option.Rack != "" && dn.GetRack().Id() != NodeId(option.Rack) {
+					continue
+				}
+				if option.DataNode != "" && dn.Id() != NodeId(option.DataNode) {
+					continue
+				}
+				counter++
+				if rand.Intn(counter) < 1 {
+					vid, locationList = v, volumeLocationList
+				}
+			}
+		}
+	}
+	return &vid, count, locationList, nil
+}
+```
