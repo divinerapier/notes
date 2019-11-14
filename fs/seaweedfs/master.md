@@ -197,8 +197,9 @@ func (vg *VolumeGrowth) GrowByCountAndType(grpcDialOption grpc.DialOption, targe
 }
 
 func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topology, option *VolumeGrowOption) (int, error) {
-	// 找到满足需求的
+	// 找到满足需求的, 大坨代码，不展开
 	servers, _ := vg.findEmptySlotsForOneVolume(topo, option)
+	// volume id 为自增 id，同时使用 raft 在 master 之间同步
 	vid, _ := topo.NextVolumeId()
 	err := vg.grow(grpcDialOption, topo, vid, option, servers...)
 	return len(servers), err
