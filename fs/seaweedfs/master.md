@@ -218,7 +218,7 @@ func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topolo
 	return len(servers), err
 }
 
-// 遍历所有的 Node，申请使用指定 vid 创建一个 volume
+// 遍历所有的 Node，申请使用指定 vid 创建一个 volume (创建逻辑在 volume 篇)
 func (vg *VolumeGrowth) grow(grpcDialOption grpc.DialOption, topo *Topology, vid storage.VolumeId, option *VolumeGrowOption, servers ...*DataNode) error {
 	for _, server := range servers {
 		if err := AllocateVolume(server, grpcDialOption, vid, option); err == nil {
