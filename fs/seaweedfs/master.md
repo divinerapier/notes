@@ -166,20 +166,12 @@ func (ms *MasterServer) dirAssignHandler(w http.ResponseWriter, r *http.Request)
 		defer ms.vgLock.Unlock()
 		if !ms.Topo.HasWritableVolume(option) {
 			// 申请创建新的 volume
-			if _, err = ms.vg.AutomaticGrowByType(option, ms.grpcDialOpiton, ms.Topo); err != nil {
-				writeJsonError(w, r, http.StatusInternalServerError,
-					fmt.Errorf("Cannot grow volume group! %v", err))
-				return
-			}
+			ms.vg.AutomaticGrowByType(option, ms.grpcDialOpiton, ms.Topo)
 		}
 	}
-	fid, count, dn, err := ms.Topo.PickForWrite(requestedCount, option)
-	if err == nil {
-		ms.maybeAddJwtAuthorization(w, fid)
-		writeJsonQuiet(w, r, http.StatusOK, operation.AssignResult{Fid: fid, Url: dn.Url(), PublicUrl: dn.PublicUrl, Count: count})
-	} else {
-		writeJsonQuiet(w, r, http.StatusNotAcceptable, operation.AssignResult{Error: err.Error()})
-	}
+	fid, count, dn, _ := ms.Topo.PickForWrite(requestedCount, option)
+	ms.maybeAddJwtAuthorization(w, fid)
+	writeJsonQuiet(w, r, http.StatusOK, operation.AssignResult{Fid: fid, Url: dn.Url(), PublicUrl: dn.PublicUrl, Count: count})
 }
 
 func (vg *VolumeGrowth) AutomaticGrowByType(option *VolumeGrowOption, grpcDialOption grpc.DialOption, topo *Topology) (count int, err error) {
@@ -206,14 +198,8 @@ func (vg *VolumeGrowth) GrowByCountAndType(grpcDialOption grpc.DialOption, targe
 
 func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topology, option *VolumeGrowOption) (int, error) {
 	// 找到满足需求的
-	servers, e := vg.findEmptySlotsForOneVolume(topo, option)
-	if e != nil {
-		return 0, e
-	}
-	vid, raftErr := topo.NextVolumeId()
-	if raftErr != nil {
-		return 0, raftErr
-	}
+	servers, _ := vg.findEmptySlotsForOneVolume(topo, option)
+	vid, _ := topo.NextVolumeId()
 	err := vg.grow(grpcDialOption, topo, vid, option, servers...)
 	return len(servers), err
 }
@@ -221,22 +207,17 @@ func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topolo
 // 遍历所有的 Node，申请使用指定 vid 创建一个 volume (创建逻辑在 volume 篇)
 func (vg *VolumeGrowth) grow(grpcDialOption grpc.DialOption, topo *Topology, vid storage.VolumeId, option *VolumeGrowOption, servers ...*DataNode) error {
 	for _, server := range servers {
-		if err := AllocateVolume(server, grpcDialOption, vid, option); err == nil {
-			vi := storage.VolumeInfo{
-				Id:               vid,
-				Size:             0,
-				Collection:       option.Collection,
-				ReplicaPlacement: option.ReplicaPlacement,
-				Ttl:              option.Ttl,
-				Version:          storage.CurrentVersion,
-			}
-			server.AddOrUpdateVolume(vi)
-			topo.RegisterVolumeLayout(vi, server)
-			glog.V(0).Infoln("Created Volume", vid, "on", server.NodeImpl.String())
-		} else {
-			glog.V(0).Infoln("Failed to assign volume", vid, "to", servers, "error", err)
-			return fmt.Errorf("Failed to assign %d: %v", vid, err)
+		AllocateVolume(server, grpcDialOption, vid, option)
+		vi := storage.VolumeInfo{
+			Id:               vid,
+			Size:             0,
+			Collection:       option.Collection,
+			ReplicaPlacement: option.ReplicaPlacement,
+			Ttl:              option.Ttl,
+			Version:          storage.CurrentVersion,
 		}
+		server.AddOrUpdateVolume(vi)
+		topo.RegisterVolumeLayout(vi, server)
 	}
 	return nil
 }
