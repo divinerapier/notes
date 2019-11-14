@@ -113,7 +113,6 @@ func NewMasterServer(r *mux.Router, port int, metaFolder string,
 	seq := sequence.NewMemorySequencer()
 	ms.Topo = topology.NewTopology("topo", seq, uint64(volumeSizeLimitMB)*1024*1024, pulseSeconds)
 	ms.vg = topology.NewDefaultVolumeGrowth()
-	glog.V(0).Infoln("Volume Size Limit is", volumeSizeLimitMB, "MB")
 
 	ms.guard = security.NewGuard(whiteList, signingKey)
 
@@ -121,6 +120,8 @@ func NewMasterServer(r *mux.Router, port int, metaFolder string,
 		handleStaticResources2(r)
 		r.HandleFunc("/", ms.proxyToLeader(ms.uiStatusHandler))
 		r.HandleFunc("/ui/index.html", ms.uiStatusHandler)
+		
+		// 将请求转发给 master
 		r.HandleFunc("/dir/assign", ms.proxyToLeader(ms.guard.WhiteList(ms.dirAssignHandler)))
 		r.HandleFunc("/dir/lookup", ms.proxyToLeader(ms.guard.WhiteList(ms.dirLookupHandler)))
 		r.HandleFunc("/dir/status", ms.proxyToLeader(ms.guard.WhiteList(ms.dirStatusHandler)))
@@ -133,9 +134,110 @@ func NewMasterServer(r *mux.Router, port int, metaFolder string,
 		r.HandleFunc("/metrics", ms.guard.WhiteList(ms.metricsHandler))
 		r.HandleFunc("/{fileId}", ms.proxyToLeader(ms.redirectHandler))
 	}
-
+	
+	// 刷新 volume 状态后台线程
 	ms.Topo.StartRefreshWritableVolumes(ms.grpcDialOpiton, garbageThreshold, ms.preallocate)
 
 	return ms
+}
+```
+
+## HTTP API
+
+### dirAssignHandler
+
+``` go
+
+func (ms *MasterServer) dirAssignHandler(w http.ResponseWriter, r *http.Request) {
+	//stats.AssignRequest()
+	requestedCount, e := strconv.ParseUint(r.FormValue("count"), 10, 64)
+	if e != nil || requestedCount == 0 {
+		requestedCount = 1
+	}
+
+	option, _ := ms.getVolumeGrowOption(r)
+
+	if !ms.Topo.HasWritableVolume(option) {
+		if ms.Topo.FreeSpace() <= 0 {
+			writeJsonQuiet(w, r, http.StatusNotFound, operation.AssignResult{Error: "No free volumes left!"})
+			return
+		}
+		ms.vgLock.Lock()
+		defer ms.vgLock.Unlock()
+		if !ms.Topo.HasWritableVolume(option) {
+			// 申请创建新的 volume
+			if _, err = ms.vg.AutomaticGrowByType(option, ms.grpcDialOpiton, ms.Topo); err != nil {
+				writeJsonError(w, r, http.StatusInternalServerError,
+					fmt.Errorf("Cannot grow volume group! %v", err))
+				return
+			}
+		}
+	}
+	fid, count, dn, err := ms.Topo.PickForWrite(requestedCount, option)
+	if err == nil {
+		ms.maybeAddJwtAuthorization(w, fid)
+		writeJsonQuiet(w, r, http.StatusOK, operation.AssignResult{Fid: fid, Url: dn.Url(), PublicUrl: dn.PublicUrl, Count: count})
+	} else {
+		writeJsonQuiet(w, r, http.StatusNotAcceptable, operation.AssignResult{Error: err.Error()})
+	}
+}
+
+func (vg *VolumeGrowth) AutomaticGrowByType(option *VolumeGrowOption, grpcDialOption grpc.DialOption, topo *Topology) (count int, err error) {
+	count, err = vg.GrowByCountAndType(grpcDialOption, vg.findVolumeCount(option.ReplicaPlacement.GetCopyCount()), option, topo)
+	if count > 0 && count%option.ReplicaPlacement.GetCopyCount() == 0 {
+		return count, nil
+	}
+	return count, err
+}
+
+func (vg *VolumeGrowth) GrowByCountAndType(grpcDialOption grpc.DialOption, targetCount int, option *VolumeGrowOption, topo *Topology) (counter int, err error) {
+	vg.accessLock.Lock()
+	defer vg.accessLock.Unlock()
+
+	for i := 0; i < targetCount; i++ {
+		if c, e := vg.findAndGrow(grpcDialOption, topo, option); e == nil {
+			counter += c
+		} else {
+			return counter, e
+		}
+	}
+	return
+}
+
+func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topology, option *VolumeGrowOption) (int, error) {
+	// 找到满足需求的
+	servers, e := vg.findEmptySlotsForOneVolume(topo, option)
+	if e != nil {
+		return 0, e
+	}
+	vid, raftErr := topo.NextVolumeId()
+	if raftErr != nil {
+		return 0, raftErr
+	}
+	err := vg.grow(grpcDialOption, topo, vid, option, servers...)
+	return len(servers), err
+}
+
+// 遍历所有的 Node，申请使用指定 vid 创建一个 volume
+func (vg *VolumeGrowth) grow(grpcDialOption grpc.DialOption, topo *Topology, vid storage.VolumeId, option *VolumeGrowOption, servers ...*DataNode) error {
+	for _, server := range servers {
+		if err := AllocateVolume(server, grpcDialOption, vid, option); err == nil {
+			vi := storage.VolumeInfo{
+				Id:               vid,
+				Size:             0,
+				Collection:       option.Collection,
+				ReplicaPlacement: option.ReplicaPlacement,
+				Ttl:              option.Ttl,
+				Version:          storage.CurrentVersion,
+			}
+			server.AddOrUpdateVolume(vi)
+			topo.RegisterVolumeLayout(vi, server)
+			glog.V(0).Infoln("Created Volume", vid, "on", server.NodeImpl.String())
+		} else {
+			glog.V(0).Infoln("Failed to assign volume", vid, "to", servers, "error", err)
+			return fmt.Errorf("Failed to assign %d: %v", vid, err)
+		}
+	}
+	return nil
 }
 ```
