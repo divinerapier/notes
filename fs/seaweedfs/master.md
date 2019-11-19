@@ -353,24 +353,30 @@ func vacuumOneVolumeLayout(grpcDialOption grpc.DialOption, volumeLayout *VolumeL
 	volumeLayout.accessLock.RUnlock()
 
 	for vid, locationList := range tmpMap {
-
+		// 蜜汁枷锁
 		volumeLayout.accessLock.RLock()
 		isReadOnly, hasValue := volumeLayout.readonlyVolumes[vid]
 		volumeLayout.accessLock.RUnlock()
 
+		// 跳过只读 volume
 		if hasValue && isReadOnly {
 			continue
 		}
 
+		// 访问 volume service 询问确认是否需要执行 GC, 无效数据超过设置阈值时需要执行
 		if batchVacuumVolumeCheck(grpcDialOption, volumeLayout, vid, locationList, garbageThreshold) {
+			// 执行 GC
 			if batchVacuumVolumeCompact(grpcDialOption, volumeLayout, vid, locationList, preallocate) {
+				// 提交 GC
 				batchVacuumVolumeCommit(grpcDialOption, volumeLayout, vid, locationList)
 			} else {
+				// 回滚
 				batchVacuumVolumeCleanup(grpcDialOption, volumeLayout, vid, locationList)
 			}
 		}
 	}
 }
+
 
 
 ```
