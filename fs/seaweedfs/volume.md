@@ -851,10 +851,12 @@ func (v *Volume) writeNeedle(n *Needle) (offset uint64, size uint32, err error) 
 	}
 
 	n.AppendAtNs = uint64(time.Now().UnixNano())
+	// 将数据写入文件
 	if offset, size, _, err = n.Append(v.dataFile, v.Version()); err != nil {
 		return
 	}
-
+	
+	// 如果当前不存在 needle， 或者已有相同 needle， 但是先于当前needle，则写入索引
 	nv, ok := v.nm.Get(n.Id)
 	if !ok || uint64(nv.Offset.ToAcutalOffset()) < offset {
 		if err = v.nm.Put(n.Id, ToOffset(int64(offset)), n.Size); err != nil {
@@ -865,6 +867,12 @@ func (v *Volume) writeNeedle(n *Needle) (offset uint64, size uint32, err error) 
 		v.lastModifiedTime = n.LastModified
 	}
 	return
+}
+
+func (nm *NeedleMap) Put(key types.NeedleId, offset types.Offset, size uint32) error {
+	_, oldSize := nm.m.Set(types.NeedleId(key), offset, size)
+	nm.logPut(key, oldSize, size)
+	return nm.appendToIndexFile(key, offset, size)
 }
 ```
 
