@@ -93,7 +93,7 @@ func vacuumOneVolumeLayout(grpcDialOption grpc.DialOption, volumeLayout *VolumeL
 	}
 }
 
-``` go
+```
 
 
 
