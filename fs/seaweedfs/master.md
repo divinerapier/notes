@@ -323,15 +323,54 @@ func (ms *MasterServer) volumeVacuumHandler(w http.ResponseWriter, r *http.Reque
 	gcString := r.FormValue("garbageThreshold")
 	gcThreshold := ms.garbageThreshold
 	if gcString != "" {
-		var err error
-		gcThreshold, err = strconv.ParseFloat(gcString, 32)
-		if err != nil {
-			glog.V(0).Infof("garbageThreshold %s is not a valid float number: %v", gcString, err)
-			return
-		}
+		gcThreshold, _ = strconv.ParseFloat(gcString, 32)
 	}
-	glog.Infoln("garbageThreshold =", gcThreshold)
 	ms.Topo.Vacuum(ms.grpcDialOpiton, gcThreshold, ms.preallocate)
 	ms.dirStatusHandler(w, r)
 }
+
+func (t *Topology) Vacuum(grpcDialOption grpc.DialOption, garbageThreshold float64, preallocate int64) int {
+	for _, col := range t.collectionMap.Items() {
+		c := col.(*Collection)
+		for _, vl := range c.storageType2VolumeLayout.Items() {
+			if vl != nil {
+				volumeLayout := vl.(*VolumeLayout)
+				vacuumOneVolumeLayout(grpcDialOption, volumeLayout, c, garbageThreshold, preallocate)
+			}
+		}
+	}
+	return 0
+}
+
+
+func vacuumOneVolumeLayout(grpcDialOption grpc.DialOption, volumeLayout *VolumeLayout, c *Collection, garbageThreshold float64, preallocate int64) {
+
+	volumeLayout.accessLock.RLock()
+	tmpMap := make(map[storage.VolumeId]*VolumeLocationList)
+	for vid, locationList := range volumeLayout.vid2location {
+		tmpMap[vid] = locationList
+	}
+	volumeLayout.accessLock.RUnlock()
+
+	for vid, locationList := range tmpMap {
+
+		volumeLayout.accessLock.RLock()
+		isReadOnly, hasValue := volumeLayout.readonlyVolumes[vid]
+		volumeLayout.accessLock.RUnlock()
+
+		if hasValue && isReadOnly {
+			continue
+		}
+
+		if batchVacuumVolumeCheck(grpcDialOption, volumeLayout, vid, locationList, garbageThreshold) {
+			if batchVacuumVolumeCompact(grpcDialOption, volumeLayout, vid, locationList, preallocate) {
+				batchVacuumVolumeCommit(grpcDialOption, volumeLayout, vid, locationList)
+			} else {
+				batchVacuumVolumeCleanup(grpcDialOption, volumeLayout, vid, locationList)
+			}
+		}
+	}
+}
+
+
 ```
