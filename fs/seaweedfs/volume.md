@@ -831,6 +831,43 @@ func (v *Volume) readNeedle(n *Needle) (int, error) {
 
 ```
 
+## Storage
+
+### Write
+
+``` go
+func (v *Volume) writeNeedle(n *Needle) (offset uint64, size uint32, err error) {
+	glog.V(4).Infof("writing needle %s", NewFileIdFromNeedle(v.Id, n).String())
+	if v.readOnly {
+		err = fmt.Errorf("%s is read-only", v.dataFile.Name())
+		return
+	}
+	v.dataFileAccessLock.Lock()
+	defer v.dataFileAccessLock.Unlock()
+	if v.isFileUnchanged(n) {
+		size = n.DataSize
+		glog.V(4).Infof("needle is unchanged!")
+		return
+	}
+
+	n.AppendAtNs = uint64(time.Now().UnixNano())
+	if offset, size, _, err = n.Append(v.dataFile, v.Version()); err != nil {
+		return
+	}
+
+	nv, ok := v.nm.Get(n.Id)
+	if !ok || uint64(nv.Offset.ToAcutalOffset()) < offset {
+		if err = v.nm.Put(n.Id, ToOffset(int64(offset)), n.Size); err != nil {
+			glog.V(4).Infof("failed to save in needle map %d: %v", n.Id, err)
+		}
+	}
+	if v.lastModifiedTime < n.LastModified {
+		v.lastModifiedTime = n.LastModified
+	}
+	return
+}
+```
+
 ### Delete
 
 ``` go
