@@ -35,6 +35,17 @@ func (ms *MasterServer) volumeVacuumHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (t *Topology) Vacuum(grpcDialOption grpc.DialOption, garbageThreshold float64, preallocate int64) int {
+	// 分层次: collection -> volume 遍历 (Items 返回一个快照)
+	// type VolumeLayout struct {
+	// 	rp               *storage.ReplicaPlacement
+	// 	ttl              *storage.TTL
+	// 	vid2location     map[storage.VolumeId]*VolumeLocationList
+	// 	writables        []storage.VolumeId        // transient array of writable volume id
+	// 	readonlyVolumes  map[storage.VolumeId]bool // transient set of readonly volumes
+	// 	oversizedVolumes map[storage.VolumeId]bool // set of oversized volumes
+	// 	volumeSizeLimit  uint64
+	// 	accessLock       sync.RWMutex
+	// }
 	for _, col := range t.collectionMap.Items() {
 		c := col.(*Collection)
 		for _, vl := range c.storageType2VolumeLayout.Items() {
@@ -82,6 +93,11 @@ func vacuumOneVolumeLayout(grpcDialOption grpc.DialOption, volumeLayout *VolumeL
 	}
 }
 
+``` go
+
+
+
+``` go
 
 func batchVacuumVolumeCheck(grpcDialOption grpc.DialOption, vl *VolumeLayout, vid storage.VolumeId, locationlist *VolumeLocationList, garbageThreshold float64) bool {
 	ch := make(chan bool, locationlist.Length())
