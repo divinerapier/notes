@@ -830,3 +830,35 @@ func (v *Volume) readNeedle(n *Needle) (int, error) {
 }
 
 ```
+
+### Delete
+
+``` go
+func (v *Volume) deleteNeedle(n *Needle) (uint32, error) {
+	if v.readOnly {
+		return 0, fmt.Errorf("%s is read-only", v.dataFile.Name())
+	}
+	v.dataFileAccessLock.Lock()
+	defer v.dataFileAccessLock.Unlock()
+	// 使用 needle id 查找索引
+	nv, ok := v.nm.Get(n.Id)
+	// 存在 needle 并且未被删除 (将 size 设置为 TombstoneFileSize 表示删除)
+	if ok && nv.Size != TombstoneFileSize {
+		size := nv.Size // size 作为返回值
+		n.Data = nil // 将数据设置为空
+		n.AppendAtNs = uint64(time.Now().UnixNano()) // 更新时间
+		// !!! 然后，把这个新的 needle 写入文件
+		offset, _, _, _ := n.Append(v.dataFile, v.Version())
+		// 从索引中删除
+		v.nm.Delete(n.Id, ToOffset(int64(offset)))
+		return size, nil
+	}
+	return 0, nil
+}
+
+func (nm *NeedleMap) Delete(key types.NeedleId, offset types.Offset) error {
+	deletedBytes := nm.m.Delete(types.NeedleId(key))
+	nm.logDelete(deletedBytes)
+	return nm.appendToIndexFile(key, offset, types.TombstoneFileSize)
+}
+```
