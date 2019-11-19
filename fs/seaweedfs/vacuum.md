@@ -268,7 +268,7 @@ func (v *Volume) copyDataAndGenerateIndexFile(dstName, idxName string, prealloca
 	defer idx.Close()
 
 	scanner := &VolumeFileScanner4Vacuum{
-		v:   v,				// 原有 colume
+		v:   v,				// 原有 volume 对象
 		now: uint64(time.Now().Unix()),
 		nm:  NewBtreeNeedleMap(idx), 	// 新的索引文件
 		dst: dst,
@@ -281,7 +281,18 @@ func (v *Volume) copyDataAndGenerateIndexFile(dstName, idxName string, prealloca
 func ScanVolumeFile(dirname string, collection string, id VolumeId,
 	needleMapKind NeedleMapType,
 	volumeFileScanner VolumeFileScanner) (err error) {
+
+	// 从磁盘(根据dirname, collection, id) 读取 volume data 文件 (不加载索引文件)
 	v, _ := loadVolumeWithoutIndex(dirname, collection, id, needleMapKind)
+	
+	// func (scanner *VolumeFileScanner4Vacuum) VisitSuperBlock(superBlock SuperBlock) error {
+	// 	scanner.version = superBlock.Version()
+	//	superBlock.CompactRevision++
+	//	_, err := scanner.dst.Write(superBlock.Bytes())
+	//	scanner.newOffset = int64(superBlock.BlockSize())
+	//	return err
+	// }
+
 	volumeFileScanner.VisitSuperBlock(v.SuperBlock)
 	defer v.Close()
 
