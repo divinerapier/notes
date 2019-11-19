@@ -282,7 +282,7 @@ func (vl *VolumeLayout) PickForWrite(count uint64, option *VolumeGrowOption) (*s
 // If "fileId" is provided, this returns the fileId location and a JWT to update or delete the file.
 // If "volumeId" is provided, this only returns the volumeId location
 func (ms *MasterServer) dirLookupHandler(w http.ResponseWriter, r *http.Request) {
-
+	// 从 http request 中解析出 volumeId, filedId(保留第一个 ',' 之前)
 	vid := r.FormValue("volumeId")
 	if vid != "" {
 		// backward compatible
@@ -300,12 +300,14 @@ func (ms *MasterServer) dirLookupHandler(w http.ResponseWriter, r *http.Request)
 	}
 	vids := []string{vid}
 	collection := r.FormValue("collection") //optional, but can be faster if too many collections
+	// 从 master 内存缓存中，查找 volume 所在服务节点
 	volumeLocations := ms.lookupVolumeId(vids, collection)
 	location := volumeLocations[vid]
 	httpStatus := http.StatusOK
 	if location.Error != "" {
 		httpStatus = http.StatusNotFound
 	} else {
+		// jwt 签名
 		ms.maybeAddJwtAuthorization(w, fileId)
 	}
 	writeJsonQuiet(w, r, httpStatus, location)
