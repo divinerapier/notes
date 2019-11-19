@@ -221,12 +221,16 @@ func (vs *VolumeServer) VacuumVolumeCheck(ctx context.Context, req *volume_serve
 
 	resp.GarbageRatio = garbageRatio
 
-	if err != nil {
-		glog.V(3).Infof("check volume %d: %v", req.VolumeId, err)
-	}
-
 	return resp, err
 
+}
+
+func (s *Store) CheckCompactVolume(volumeId VolumeId) (float64, error) {
+	if v := s.findVolume(volumeId); v != nil {
+		// 直接读取内存中的数据，在删除覆盖的时候立即更新
+		return v.garbageLevel(), nil
+	}
+	return 0, fmt.Errorf("volume id %d is not found during check compact", volumeId)
 }
 
 ```
