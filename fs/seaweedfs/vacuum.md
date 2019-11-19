@@ -240,19 +240,72 @@ func (s *Store) CheckCompactVolume(volumeId VolumeId) (float64, error) {
 ``` go
 
 func (vs *VolumeServer) VacuumVolumeCompact(ctx context.Context, req *volume_server_pb.VacuumVolumeCompactRequest) (*volume_server_pb.VacuumVolumeCompactResponse, error) {
-
 	resp := &volume_server_pb.VacuumVolumeCompactResponse{}
-
 	err := vs.store.CompactVolume(storage.VolumeId(req.VolumeId), req.Preallocate)
-
-	if err != nil {
-		glog.Errorf("compact volume %d: %v", req.VolumeId, err)
-	} else {
-		glog.V(1).Infof("compact volume %d", req.VolumeId)
-	}
-
 	return resp, err
+}
 
+func (s *Store) CompactVolume(vid VolumeId, preallocate int64) error {
+	v := s.findVolume(vid)
+	return v.Compact(preallocate)
+}
+
+func (v *Volume) Compact(preallocate int64) error {
+	filePath := v.FileName() // path/to/dir/(collection_)id
+	v.lastCompactIndexOffset = v.nm.IndexFileSize()
+	v.lastCompactRevision = v.SuperBlock.CompactRevision
+	return v.copyDataAndGenerateIndexFile(filePath+".cpd", filePath+".cpx", preallocate)
+}
+
+
+func (v *Volume) copyDataAndGenerateIndexFile(dstName, idxName string, preallocate int64) (err error) {
+	// dstName: path/to/dir/(collection_)id.cpd
+	// idxName: path/to/dir/(collection_)id.cpx
+	// 创建文件，没有多余操作 preallocate 是无效参数
+	dst, _ := createVolumeFile(dstName, preallocate)
+	defer dst.Close()
+	idx, _ := os.OpenFile(idxName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	defer idx.Close()
+
+	scanner := &VolumeFileScanner4Vacuum{
+		v:   v,				// 原有 colume
+		now: uint64(time.Now().Unix()),
+		nm:  NewBtreeNeedleMap(idx), 	// 新的索引文件
+		dst: dst,
+	}
+	err = ScanVolumeFile(v.dir, v.Collection, v.Id, v.needleMapKind, scanner)
+	return
+}
+
+
+func ScanVolumeFile(dirname string, collection string, id VolumeId,
+	needleMapKind NeedleMapType,
+	volumeFileScanner VolumeFileScanner) (err error) {
+	v, _ := loadVolumeWithoutIndex(dirname, collection, id, needleMapKind)
+	volumeFileScanner.VisitSuperBlock(v.SuperBlock)
+	defer v.Close()
+
+	version := v.Version()
+	offset := int64(v.SuperBlock.BlockSize())
+	return ScanVolumeFileFrom(version, v.dataFile, offset, volumeFileScanner)
+}
+
+
+func ScanVolumeFileFrom(version Version, dataFile *os.File, offset int64, volumeFileScanner VolumeFileScanner) (err error) {
+	n, rest, _ := ReadNeedleHeader(dataFile, version, offset)
+
+	for n != nil {
+		if volumeFileScanner.ReadNeedleBody() {
+			n.ReadNeedleBody(dataFile, version, offset+NeedleEntrySize, rest)
+		}
+		err := volumeFileScanner.VisitNeedle(n, offset)
+		if err == io.EOF {
+			return nil
+		}
+		offset += NeedleEntrySize + rest
+		n, rest, _ = ReadNeedleHeader(dataFile, version, offset)
+	}
+	return nil
 }
 
 ```
