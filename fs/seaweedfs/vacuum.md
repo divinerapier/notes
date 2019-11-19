@@ -293,20 +293,28 @@ func ScanVolumeFile(dirname string, collection string, id VolumeId,
 	//	return err
 	// }
 
+	// 从现有的 volume 数据文件中读取 super block，更新 compact revision 写入到新的文件中
 	volumeFileScanner.VisitSuperBlock(v.SuperBlock)
 	defer v.Close()
 
 	version := v.Version()
 	offset := int64(v.SuperBlock.BlockSize())
+	
+	// version: 数据格式版本
+	// v.dataFile: 磁盘上的数据文件
+	// offset: 新创建的 volume 对象记录的偏移量 (应该是 8Bytes)
+	// volumeFileScanner: 扫描方式
 	return ScanVolumeFileFrom(version, v.dataFile, offset, volumeFileScanner)
 }
 
 
 func ScanVolumeFileFrom(version Version, dataFile *os.File, offset int64, volumeFileScanner VolumeFileScanner) (err error) {
 	n, rest, _ := ReadNeedleHeader(dataFile, version, offset)
-
+	
+	// 迭代从
 	for n != nil {
-		if volumeFileScanner.ReadNeedleBody() {
+		if volumeFileScanner.ReadNeedleBody() { // always returns true
+			// 读取 needle
 			n.ReadNeedleBody(dataFile, version, offset+NeedleEntrySize, rest)
 		}
 		err := volumeFileScanner.VisitNeedle(n, offset)
@@ -319,6 +327,49 @@ func ScanVolumeFileFrom(version Version, dataFile *os.File, offset int64, volume
 	return nil
 }
 
+```
+
+#### Volume File Scanner For Vacuum
+
+``` go
+
+type VolumeFileScanner4Vacuum struct {
+	version   Version
+	v         *Volume
+	dst       *os.File
+	nm        *NeedleMap
+	newOffset int64
+	now       uint64
+}
+
+func (scanner *VolumeFileScanner4Vacuum) VisitSuperBlock(superBlock SuperBlock) error {
+	scanner.version = superBlock.Version()
+	superBlock.CompactRevision++
+	_, err := scanner.dst.Write(superBlock.Bytes())
+	scanner.newOffset = int64(superBlock.BlockSize())
+	return err
+
+}
+func (scanner *VolumeFileScanner4Vacuum) ReadNeedleBody() bool {
+	return true
+}
+
+func (scanner *VolumeFileScanner4Vacuum) VisitNeedle(n *Needle, offset int64) error {
+	// 过滤过期数据
+	if n.HasTtl() && scanner.now >= n.LastModified+uint64(scanner.v.Ttl.Minutes()*60) {
+		return nil
+	}
+	nv, ok := scanner.v.nm.Get(n.Id)
+	// 1. 在索引中能找到
+	// 2. 索引中的偏移量与传入的偏移量相同(因为写入同名 needle 会更新偏移量)
+	// 3. 大小合法
+	if ok && nv.Offset.ToAcutalOffset() == offset && nv.Size > 0 && nv.Size != TombstoneFileSize {
+		scanner.nm.Put(n.Id, ToOffset(scanner.newOffset), n.Size)
+		n.Append(scanner.dst, scanner.v.Version())
+		scanner.newOffset += n.DiskSize(scanner.version)
+	}
+	return nil
+}
 ```
 
 ### VacuumVolumeCommit
