@@ -392,6 +392,62 @@ func (vs *VolumeServer) VacuumVolumeCommit(ctx context.Context, req *volume_serv
 
 }
 
+func (s *Store) CommitCompactVolume(vid VolumeId) error {
+	if v := s.findVolume(vid); v != nil {
+		return v.CommitCompact()
+	}
+	return fmt.Errorf("volume id %d is not found during commit compact", vid)
+}
+
+
+func (v *Volume) CommitCompact() error {
+	glog.V(0).Infof("Committing volume %d vacuuming...", v.Id)
+	v.dataFileAccessLock.Lock()
+	defer v.dataFileAccessLock.Unlock()
+	glog.V(3).Infof("Got volume %d committing lock...", v.Id)
+	v.compactingWg.Add(1)
+	defer v.compactingWg.Done()
+	v.nm.Close()
+	if err := v.dataFile.Close(); err != nil {
+		glog.V(0).Infof("fail to close volume %d", v.Id)
+	}
+	v.dataFile = nil
+
+	var e error
+	if e = v.makeupDiff(v.FileName()+".cpd", v.FileName()+".cpx", v.FileName()+".dat", v.FileName()+".idx"); e != nil {
+		glog.V(0).Infof("makeupDiff in CommitCompact volume %d failed %v", v.Id, e)
+		e = os.Remove(v.FileName() + ".cpd")
+		if e != nil {
+			return e
+		}
+		e = os.Remove(v.FileName() + ".cpx")
+		if e != nil {
+			return e
+		}
+	} else {
+		var e error
+		if e = os.Rename(v.FileName()+".cpd", v.FileName()+".dat"); e != nil {
+			return fmt.Errorf("rename %s: %v", v.FileName()+".cpd", e)
+		}
+		if e = os.Rename(v.FileName()+".cpx", v.FileName()+".idx"); e != nil {
+			return fmt.Errorf("rename %s: %v", v.FileName()+".cpx", e)
+		}
+	}
+
+	//glog.V(3).Infof("Pretending to be vacuuming...")
+	//time.Sleep(20 * time.Second)
+
+	os.RemoveAll(v.FileName() + ".ldb")
+	os.RemoveAll(v.FileName() + ".bdb")
+
+	glog.V(3).Infof("Loading volume %d commit file...", v.Id)
+	if e = v.load(true, false, v.needleMapKind, 0); e != nil {
+		return e
+	}
+	return nil
+}
+
+
 ```
 
 ### VacuumVolumeCleanup
