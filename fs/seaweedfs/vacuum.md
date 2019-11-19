@@ -401,52 +401,121 @@ func (s *Store) CommitCompactVolume(vid VolumeId) error {
 
 
 func (v *Volume) CommitCompact() error {
-	glog.V(0).Infof("Committing volume %d vacuuming...", v.Id)
 	v.dataFileAccessLock.Lock()
 	defer v.dataFileAccessLock.Unlock()
-	glog.V(3).Infof("Got volume %d committing lock...", v.Id)
 	v.compactingWg.Add(1)
 	defer v.compactingWg.Done()
 	v.nm.Close()
-	if err := v.dataFile.Close(); err != nil {
-		glog.V(0).Infof("fail to close volume %d", v.Id)
-	}
+	v.dataFile.Close()
 	v.dataFile = nil
 
-	var e error
-	if e = v.makeupDiff(v.FileName()+".cpd", v.FileName()+".cpx", v.FileName()+".dat", v.FileName()+".idx"); e != nil {
-		glog.V(0).Infof("makeupDiff in CommitCompact volume %d failed %v", v.Id, e)
-		e = os.Remove(v.FileName() + ".cpd")
-		if e != nil {
-			return e
-		}
-		e = os.Remove(v.FileName() + ".cpx")
-		if e != nil {
-			return e
-		}
+	if e := v.makeupDiff(v.FileName()+".cpd", v.FileName()+".cpx", v.FileName()+".dat", v.FileName()+".idx"); e != nil {
+		os.Remove(v.FileName() + ".cpd")
+		os.Remove(v.FileName() + ".cpx")
 	} else {
-		var e error
-		if e = os.Rename(v.FileName()+".cpd", v.FileName()+".dat"); e != nil {
-			return fmt.Errorf("rename %s: %v", v.FileName()+".cpd", e)
-		}
-		if e = os.Rename(v.FileName()+".cpx", v.FileName()+".idx"); e != nil {
-			return fmt.Errorf("rename %s: %v", v.FileName()+".cpx", e)
-		}
+		os.Rename(v.FileName()+".cpd", v.FileName()+".dat")
+		os.Rename(v.FileName()+".cpx", v.FileName()+".idx")
 	}
-
-	//glog.V(3).Infof("Pretending to be vacuuming...")
-	//time.Sleep(20 * time.Second)
 
 	os.RemoveAll(v.FileName() + ".ldb")
 	os.RemoveAll(v.FileName() + ".bdb")
 
-	glog.V(3).Infof("Loading volume %d commit file...", v.Id)
-	if e = v.load(true, false, v.needleMapKind, 0); e != nil {
-		return e
-	}
-	return nil
+	return v.load(true, false, v.needleMapKind, 0)
 }
 
+
+// newDatFileName: *.cpd
+// newIdxFileName: *.cpx
+// oldDatFileName: *.dat
+// oldIdxFileName: *.idx
+func (v *Volume) makeupDiff(newDatFileName, newIdxFileName, oldDatFileName, oldIdxFileName string) (err error) {
+	// 打开 *.dat, *.idx 文件
+	oldIdxFile, _ := os.Open(oldIdxFileName)
+	oldDatFile, _ := os.Open(oldDatFileName)
+
+	defer oldIdxFile.Close()
+	defer oldDatFile.Close()
+
+	indexSize, _ := verifyIndexFileIntegrity(oldIdxFile)
+	if indexSize == 0 || uint64(indexSize) <= v.lastCompactIndexOffset {
+		return nil
+	}
+	
+	// 从旧的 dat 文件中的 super block 读取 compact revision
+	oldDatCompactRevision, _ := fetchCompactRevisionFromDatFile(oldDatFile)
+	if oldDatCompactRevision != v.lastCompactRevision {
+		return fmt.Errorf("current old dat file's compact revision %d is not the expected one %d", oldDatCompactRevision, v.lastCompactRevision)
+	}
+
+	type keyField struct {
+		offset Offset
+		size   uint32
+	}
+	incrementedHasUpdatedIndexEntry := make(map[NeedleId]keyField)
+
+	for idxOffset := indexSize - NeedleEntrySize; uint64(idxOffset) >= v.lastCompactIndexOffset; idxOffset -= NeedleEntrySize {
+		IdxEntry, _ := readIndexEntryAtOffset(oldIdxFile, idxOffset)
+		key, offset, size := IdxFileEntry(IdxEntry)
+		if _, found := incrementedHasUpdatedIndexEntry[key]; !found {
+			incrementedHasUpdatedIndexEntry[key] = keyField{
+				offset: offset,
+				size:   size,
+			}
+		}
+	}
+
+	// no updates during commit step
+	if len(incrementedHasUpdatedIndexEntry) == 0 {
+		return nil
+	}
+
+	// 打开 *.cpd, cpx 文件
+	dst, _ := os.OpenFile(newDatFileName, os.O_RDWR, 0644)
+	idx, _ := os.OpenFile(newIdxFileName, os.O_RDWR, 0644); err != nil {
+
+	defer dst.Close()
+	defer idx.Close()
+
+	newDatCompactRevision, _ := fetchCompactRevisionFromDatFile(dst)
+	if oldDatCompactRevision+1 != newDatCompactRevision {
+		return fmt.Errorf("oldDatFile %s 's compact revision is %d while newDatFile %s 's compact revision is %d", oldDatFileName, oldDatCompactRevision, newDatFileName, newDatCompactRevision)
+	}
+
+	idxEntryBytes := make([]byte, NeedleIdSize+OffsetSize+SizeSize)
+	for key, increIdxEntry := range incrementedHasUpdatedIndexEntry {
+		NeedleIdToBytes(idxEntryBytes[0:NeedleIdSize], key)
+		OffsetToBytes(idxEntryBytes[NeedleIdSize:NeedleIdSize+OffsetSize], increIdxEntry.offset)
+		util.Uint32toBytes(idxEntryBytes[NeedleIdSize+OffsetSize:NeedleIdSize+OffsetSize+SizeSize], increIdxEntry.size)
+
+		offset, _ := dst.Seek(0, 2)
+		//ensure file writing starting from aligned positions
+		if offset%NeedlePaddingSize != 0 {
+			offset = offset + (NeedlePaddingSize - offset%NeedlePaddingSize)
+			offset, _ = v.dataFile.Seek(offset, 0)
+		}
+
+		//updated needle
+		if !increIdxEntry.offset.IsZero() && increIdxEntry.size != 0 && increIdxEntry.size != TombstoneFileSize {
+			//even the needle cache in memory is hit, the need_bytes is correct
+			needleBytes, _ := ReadNeedleBlob(oldDatFile, increIdxEntry.offset.ToAcutalOffset(), increIdxEntry.size, v.Version())
+			dst.Write(needleBytes)
+			util.Uint32toBytes(idxEntryBytes[8:12], uint32(offset/NeedlePaddingSize))
+		} else { //deleted needle
+			//fakeDelNeedle 's default Data field is nil
+			fakeDelNeedle := new(Needle)
+			fakeDelNeedle.Id = key
+			fakeDelNeedle.Cookie = 0x12345678
+			fakeDelNeedle.AppendAtNs = uint64(time.Now().UnixNano())
+			fakeDelNeedle.Append(dst, v.Version())
+			util.Uint32toBytes(idxEntryBytes[8:12], uint32(0))
+		}
+
+		idx.Seek(0, 2)
+		idx.Write(idxEntryBytes)
+	}
+
+	return nil
+}
 
 ```
 
