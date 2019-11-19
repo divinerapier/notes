@@ -23,7 +23,7 @@ func runMaster(cmd *Command, args []string) bool {
 		masterWhiteList = strings.Split(*masterWhiteListOption, ",")
 	}
   
-  // 标准版本中， volume 最大为 30G
+  	// 标准版本中， volume 最大为 30G
 	if *volumeSizeLimitMB > util.VolumeSizeLimitGB*1000 {
 		glog.Fatalf("volumeSizeLimitMB should be smaller than 30000")
 	}
@@ -31,7 +31,7 @@ func runMaster(cmd *Command, args []string) bool {
 	metrics.MasterRegisterMetrics()
 	r := mux.NewRouter()
   
-  // !!!
+  	// !!!
 	ms := weed_server.NewMasterServer(r, *mport, *metaFolder,
 		*volumeSizeLimitMB, *volumePreallocate,
 		*mpulse, *defaultReplicaPlacement, *garbageThreshold,
@@ -51,7 +51,7 @@ func runMaster(cmd *Command, args []string) bool {
 		// start raftServer
 		myMasterAddress, peers := checkPeers(*masterIp, *mport, *masterPeers)
     
-    // 启动 Raft Server
+    	// 启动 Raft Server
 		raftServer := weed_server.NewRaftServer(security.LoadClientTLS(viper.Sub("grpc"), "master"),
 			peers, myMasterAddress, *metaFolder, ms.Topo, *mpulse)
 		ms.SetRaftServer(raftServer)
@@ -70,7 +70,7 @@ func runMaster(cmd *Command, args []string) bool {
 
 	// start http server
 	httpS := &http.Server{Handler: r}
-  httpS.Serve(masterListener)
+  	httpS.Serve(masterListener)
 
 	return true
 }
@@ -122,6 +122,8 @@ func NewMasterServer(r *mux.Router, port int, metaFolder string,
 		r.HandleFunc("/ui/index.html", ms.uiStatusHandler)
 		
 		// 将请求转发给 master
+		
+		// 向 master 申请分配 volume， file id 用于上传
 		r.HandleFunc("/dir/assign", ms.proxyToLeader(ms.guard.WhiteList(ms.dirAssignHandler)))
 		r.HandleFunc("/dir/lookup", ms.proxyToLeader(ms.guard.WhiteList(ms.dirLookupHandler)))
 		r.HandleFunc("/dir/status", ms.proxyToLeader(ms.guard.WhiteList(ms.dirStatusHandler)))
