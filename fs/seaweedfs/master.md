@@ -313,3 +313,25 @@ func (ms *MasterServer) dirLookupHandler(w http.ResponseWriter, r *http.Request)
 	writeJsonQuiet(w, r, httpStatus, location)
 }
 ```
+
+### volumeVacuumHandler
+
+手工触发 `GC`
+
+``` go
+func (ms *MasterServer) volumeVacuumHandler(w http.ResponseWriter, r *http.Request) {
+	gcString := r.FormValue("garbageThreshold")
+	gcThreshold := ms.garbageThreshold
+	if gcString != "" {
+		var err error
+		gcThreshold, err = strconv.ParseFloat(gcString, 32)
+		if err != nil {
+			glog.V(0).Infof("garbageThreshold %s is not a valid float number: %v", gcString, err)
+			return
+		}
+	}
+	glog.Infoln("garbageThreshold =", gcThreshold)
+	ms.Topo.Vacuum(ms.grpcDialOpiton, gcThreshold, ms.preallocate)
+	ms.dirStatusHandler(w, r)
+}
+```
