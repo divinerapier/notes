@@ -275,3 +275,39 @@ func (vl *VolumeLayout) PickForWrite(count uint64, option *VolumeGrowOption) (*s
 	return &vid, count, locationList, nil
 }
 ```
+
+### dirLookupHandler
+
+``` go
+// If "fileId" is provided, this returns the fileId location and a JWT to update or delete the file.
+// If "volumeId" is provided, this only returns the volumeId location
+func (ms *MasterServer) dirLookupHandler(w http.ResponseWriter, r *http.Request) {
+
+	vid := r.FormValue("volumeId")
+	if vid != "" {
+		// backward compatible
+		commaSep := strings.Index(vid, ",")
+		if commaSep > 0 {
+			vid = vid[0:commaSep]
+		}
+	}
+	fileId := r.FormValue("fileId")
+	if fileId != "" {
+		commaSep := strings.Index(fileId, ",")
+		if commaSep > 0 {
+			vid = fileId[0:commaSep]
+		}
+	}
+	vids := []string{vid}
+	collection := r.FormValue("collection") //optional, but can be faster if too many collections
+	volumeLocations := ms.lookupVolumeId(vids, collection)
+	location := volumeLocations[vid]
+	httpStatus := http.StatusOK
+	if location.Error != "" {
+		httpStatus = http.StatusNotFound
+	} else {
+		ms.maybeAddJwtAuthorization(w, fileId)
+	}
+	writeJsonQuiet(w, r, httpStatus, location)
+}
+```
