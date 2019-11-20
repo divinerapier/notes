@@ -538,6 +538,19 @@ func (vs *VolumeServer) VacuumVolumeCleanup(ctx context.Context, req *volume_ser
 	return resp, err
 
 }
+
+func (s *Store) CommitCleanupVolume(vid VolumeId) error {
+	if v := s.findVolume(vid); v != nil {
+		return v.cleanupCompact()
+	}
+	return fmt.Errorf("volume id %d is not found during cleaning up", vid)
+}
+
+func (v *Volume) cleanupCompact() error {
+	os.Remove(v.FileName() + ".cpd")
+	os.Remove(v.FileName() + ".cpx")
+	return nil
+}
 ```
 
 
