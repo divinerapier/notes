@@ -53,7 +53,7 @@ enum Poll<T> {
 }
 ```
 
-执行器(executor)通过不断调用 `poll` 来执行 `Future`。 当 `Future` 完成时，返回 `Poll::Ready(Result)`；否则，返回 `Poll::Pending`，并在 `Future` 就绪时，调用 `wake()` 函数。 调用 `wake()` 时，执行器驱动 `Future` 再次调用 `poll`，推进 `Future` 完成。
+执行器`(executor)`通过不断调用 `poll` 来执行 `Future`。 当 `Future` 完成时，返回 `Poll::Ready(Result)`；否则，返回 `Poll::Pending`，并在 `Future` 就绪时，调用 `wake()`，继续执行 `Future`，推进 `Future` 完成。
 执行器(executor)通过 `wake()` 函数精确感知那些就绪的 `Future`，否则，只能持续轮询所有 `Future`。
 例如，考虑以下情况：我们想从一个套接字中读取数据，该套接字可能有(无)数据。有数据，则读入并返回 `Poll::Ready(data)`，但是如果没有数据可用，则我们的 `Future` 将受阻，无法再取得进展。 如果没有可用数据，则必须在套接字上的数据准备就绪时注册 `wake` 才能被调用，这将告诉执行者我们的 `Future` 已准备好继续执行。 一个简单的 `SocketRead` `Future` 可能看起来像这样：
 
