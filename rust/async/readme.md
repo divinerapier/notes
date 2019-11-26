@@ -17,3 +17,16 @@ fn get_two_sites() {
     thread_two.join().expect("thread two panicked");
 }
 ```
+这对于大多数程序来说，可以很好的工作。但也有一定的局限性，线程切换与线程之间共享数据会有很大的开销。即使，一个线程什么也不做，同样会消耗系统资源。消除这些开销，是设计异步程序模式的初衷。下面，使用 `async/await` 重写上面的代码。
+
+``` rust
+async fn get_two_sites_async() {
+    // Create two different "futures" which, when run to completion,
+    // will asynchronously download the webpages.
+    let future_one = download_async("https://www.foo.com");
+    let future_two = download_async("https://www.bar.com");
+
+    // Run both futures to completion at the same time.
+    join!(future_one, future_two);
+}
+```
