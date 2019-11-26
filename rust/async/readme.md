@@ -52,3 +52,6 @@ enum Poll<T> {
     Pending,
 }
 ```
+
+可以通过调用 `Poll` 来推动 `Future` 尽可能地接近完成。`Future` 完成，将返回 `Poll::Ready(Result)`。否则，将返回 `Poll::Pending`，并安排在 `Future` 准备好时调用 `wake()` 函数。 调用 `wake()` 时，执行器驱动 `Future` 再次调用 `poll`，推进 `Future` 完成。
+如果离开 `wake()`，执行器将无法感知一个 `Future` 何时可以继续执行，将持续的
