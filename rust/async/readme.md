@@ -54,4 +54,31 @@ enum Poll<T> {
 ```
 
 可以通过调用 `Poll` 来推动 `Future` 尽可能地接近完成。`Future` 完成，将返回 `Poll::Ready(Result)`。否则，将返回 `Poll::Pending`，并安排在 `Future` 准备好时调用 `wake()` 函数。 调用 `wake()` 时，执行器驱动 `Future` 再次调用 `poll`，推进 `Future` 完成。
-如果离开 `wake()`，执行器将无法感知一个 `Future` 何时可以继续执行，将持续的
+如果离开 `wake()`，执行器将无法感知一个 `Future` 何时可以继续执行，将持续的轮询每一个 `Future`。正是通过 `wake()`，执行期可以精确的知道已经就绪可以调用 `poll` 的 `Futures` 。
+例如，考虑以下情况：我们想从一个套接字中读取数据，该套接字可能已经或可能没有数据。 如果有数据，我们可以将其读入并返回 `Poll::Ready(data)`，但是如果没有数据可用，则我们的 `Future` 将受阻，无法再取得进展。 如果没有可用数据，则必须在套接字上的数据准备就绪时注册 `wake` 才能被调用，这将告诉执行者我们的 `Future` 已准备好继续执行。 一个简单的 `SocketRead` `Future` 可能看起来像这样：
+
+``` Rust
+pub struct SocketRead<'a> {
+    socket: &'a Socket,
+}
+
+impl SimpleFuture for SocketRead<'_> {
+    type Output = Vec<u8>;
+
+    fn poll(&mut self, wake: fn()) -> Poll<Self::Output> {
+        if self.socket.has_data_to_read() {
+            // The socket has data-- read it into a buffer and return it.
+            Poll::Ready(self.socket.read_buf())
+        } else {
+            // The socket does not yet have data.
+            //
+            // Arrange for `wake` to be called once data is available.
+            // When data becomes available, `wake` will be called, and the
+            // user of this `Future` will know to call `poll` again and
+            // receive data.
+            self.socket.set_readable_callback(wake);
+            Poll::Pending
+        }
+    }
+}
+`
