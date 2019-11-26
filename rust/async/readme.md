@@ -32,3 +32,23 @@ async fn get_two_sites_async() {
 ```
 总之，异步相较于多线程而言，有速度更快，占用资源更少的潜力。但是，操作系统本身就支持线程，使用线程开发也不需要特殊的编程模型。但是，异步编程需要编程语言提供库级别的支持。`Rust` 通过 `async fn` 创建一个返回 `Future` 的异步函数。
 同时，传统的多线程模型就能提供比较好的效率，同时，`Rust` 占用内存小，行为可预测的特点使得即使不用 `async` 也能很好的工作。使用异步开发增加的额外复杂度并不总是值得的。
+
+## Under the Hood: Excuting Futures and Tasks
+
+本节介绍底层数据结构: `Future` 与异步任务是如何被调度的。
+
+### The Future Trait
+
+`Future` 是 `Rust` 异步编程的核心特性。一个 `Future` 是一个异步任务的计算单元，最终将产生一个值(可能为空`()`)。如下为一个简单的例子:
+
+``` rust
+trait SimpleFuture {
+    type Output;
+    fn poll(&mut self, wake: fn()) -> Poll<Self::Output>;
+}
+
+enum Poll<T> {
+    Ready(T),
+    Pending,
+}
+```
