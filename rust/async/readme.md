@@ -30,3 +30,4 @@ async fn get_two_sites_async() {
     join!(future_one, future_two);
 }
 ```
+总之，异步相较于多线程而言，有速度更快，占用资源更少的潜力。但是，操作系统本身就支持线程。
