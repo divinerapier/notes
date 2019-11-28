@@ -44,3 +44,15 @@ $ rustup component add rls rust-analysis rust-src
 优点: 跳转，代码提示都还不错。   
 缺点: 用着不舒服。   
 
+## Errors
+
+### cargo watch not found
+
+```
+`cargo watch` failed with 127: /bin/sh: 1: cargo: not found
+```
+
+``` bash
+$ cargo install cargo-watch
+```
+
