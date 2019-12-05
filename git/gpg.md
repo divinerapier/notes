@@ -76,8 +76,17 @@ $ echo "no-tty" >> ~/.gnupg/gpg.conf
 $ echo "export GPG_TTY=$(tty)" >> ~/.bashrc
 ```
 
+2. GPG Hangs When Private Keys are Accessed
+
+``` bash
+# restart gpg-agent: refers to 4, 5
+$ gpgconf --kill gpg-agent
+```
+
 ## Reference
 
 1. https://help.github.com/en/articles/telling-git-about-your-signing-key   
 2. https://ducfilan.wordpress.com/2017/03/10/the-git-error-gpg-failed-to-sign-the-data/
 3. https://www.jianshu.com/p/2ed292ae2365
+4. [GPG Hangs When Private Keys are Accessed](https://unix.stackexchange.com/questions/382279/gpg-hangs-when-private-keys-are-accessed)
+5. [https://superuser.com/questions/1075404/how-can-i-restart-gpg-agent](https://superuser.com/questions/1075404/how-can-i-restart-gpg-agent)
