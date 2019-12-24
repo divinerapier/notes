@@ -65,3 +65,10 @@ _26956.c:843:15: error: expected ‘)’ before ‘int’
  #define mouse_trafo(y,x,to_screen) wmouse_trafo(stdscr,y,x,to_screen)
                                                         ^
 ```
+
+打开文件 `include/curses.h`, 找到
+
+``` c
+extern NCURSES_EXPORT(bool)    mouse_trafo (int*, int*, bool);              /* generated */
+``` 
+删除 `/* generated */`
