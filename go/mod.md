@@ -1,9 +1,5 @@
-# Go Mod
+# Go Module
 
-## Disable checksum verify
+## Use private repository
 
-使用本地仓库时，在 `sum.golang.org` 无法找到对应的 `checksum`, 可执行 
-``` bash
-$ export GOSUMDB=off
-```
-将检查关闭
+https://medium.com/mabar/today-i-learned-fix-go-get-private-repository-return-error-reading-sum-golang-org-lookup-93058a058dd8
