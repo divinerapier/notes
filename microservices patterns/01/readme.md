@@ -12,7 +12,7 @@
 ## 什么是单体地狱
 
 ![monolithic-architecture](./monolithic-architecture.png)
-![monolithic-hell](./monolithic-hell.png)
+![monolithic-hell](./monolithic-hell.jpg)
 
 ## 单体架构的优点
 
