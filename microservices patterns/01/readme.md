@@ -11,7 +11,7 @@
 
 ## 什么是单体地狱
 
-
+[monolithic-architecture](./monolithic-architecture.png)
 
 
 ## 单体架构的优点
