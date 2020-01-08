@@ -11,8 +11,22 @@
 
 ## 什么是单体地狱
 
+<details>
+<summary>单体架构</summary>
+
 ![monolithic-architecture](./monolithic-architecture.png)
+
+
+</details>
+
+
+<details>
+<summary>单体地狱</summary>
+
 ![monolithic-hell](./monolithic-hell.jpg)
+
+
+</details>
 
 ## 单体架构的优点
 
