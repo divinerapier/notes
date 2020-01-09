@@ -27,11 +27,9 @@
 
 </details>
 
-### 优点
-
 
 <details>
-<summary></summary>
+<summary>优点</summary>
 
 1. 应用的开发很简单
 2. 易于对应用程序进行大规模的更改
@@ -54,10 +52,9 @@
 
 </details>
 
-### 单体架构的缺点
 
 <details>
-<summary></summary>
+<summary>缺点</summary>
 
 1. 过度的复杂性会吓退开发者
 2. 开发速度缓慢
