@@ -17,6 +17,13 @@
 ![monolithic-architecture](./monolithic-architecture.png)
 
 
++ 入站 `(inbound)` 适配器: 通过调用业务逻辑来处理各类请求
+  - `REST API`
+  - `Web` 用户界面
+  
++ 出站 `(outbound)` 适配器: 使业务逻辑能够访问 `MySQL` 数据库并调用 `Twilio` 和 `Stripe` 等云服务
+ 
+
 </details>
 
 
