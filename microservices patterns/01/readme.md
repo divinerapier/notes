@@ -9,7 +9,8 @@
 > 微服务架构的模式语言及为什么使用它
 
 
-## 什么是单体地狱
+## 单体架构
+
 
 <details>
 <summary>单体架构</summary>
@@ -26,16 +27,8 @@
 
 </details>
 
+### 优点
 
-<details>
-<summary>单体地狱</summary>
-
-![monolithic-hell](./monolithic-hell.jpg)
-
-
-</details>
-
-## 单体架构的优点
 
 <details>
 <summary></summary>
@@ -49,7 +42,19 @@
 </details>
 
 
-## 单体架构的缺点
+
+### 单体地狱
+
+
+<details>
+<summary>单体地狱</summary>
+
+![monolithic-hell](./monolithic-hell.jpg)
+
+
+</details>
+
+### 单体架构的缺点
 
 <details>
 <summary></summary>
