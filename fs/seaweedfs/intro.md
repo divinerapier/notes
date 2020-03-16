@@ -2,6 +2,38 @@
 
 ## 概述
 
+### 架构
+
+![架构图](res/architecture.png)
+
+#### Master - Volume
+
+*`master` -> `volume`*
+
+1. `master` 主动请求 `volume` 创建新的 `volume`
+
+*`volume` -> `master`*
+
+1. `volume` 心跳定时/事件触发同步状态到 `master`
+
+#### Master - Filer
+
+*`master` -> `filer`*
+
+1. 心跳更新 `volume` 的状态
+
+*`filer` -> `master`*
+
+1. `filer` 主动询问 `volume` 地址
+1. `filer` 请求分配地址
+
+#### Filer - Volume
+
+*`filer` -> `volume`*
+
+1. `filer` 请求 `volume` 读取大文件
+1. `filer` 写入数据
+
 Seaweedfs 上传文件
 
 ### Assign
