@@ -1,6 +1,98 @@
 # Kubernetes Informer
 
+## Code
+
+`client-go@b111a621:tools/cache/shared_informer.go:338`
+
+### Interfaces And Structs
+
+#### Interfaces
+
+有两个关于 `informer` 的 `interface`
+
 ``` go
+type SharedInformer interface {
+    // AddEventHandler adds an event handler to the shared informer using the shared informer's resync
+    // period.  Events to a single handler are delivered sequentially, but there is no coordination
+    // between different handlers.
+    AddEventHandler(handler ResourceEventHandler)
+    // AddEventHandlerWithResyncPeriod adds an event handler to the
+    // shared informer with the requested resync period; zero means
+    // this handler does not care about resyncs.  The resync operation
+    // consists of delivering to the handler an update notification
+    // for every object in the informer's local cache; it does not add
+    // any interactions with the authoritative storage.  Some
+    // informers do no resyncs at all, not even for handlers added
+    // with a non-zero resyncPeriod.  For an informer that does
+    // resyncs, and for each handler that requests resyncs, that
+    // informer develops a nominal resync period that is no shorter
+    // than the requested period but may be longer.  The actual time
+    // between any two resyncs may be longer than the nominal period
+    // because the implementation takes time to do work and there may
+    // be competing load and scheduling noise.
+    AddEventHandlerWithResyncPeriod(handler ResourceEventHandler, resyncPeriod time.Duration)
+    // GetStore returns the informer's local cache as a Store.
+    GetStore() Store
+    // GetController is deprecated, it does nothing useful
+    GetController() Controller
+    // Run starts and runs the shared informer, returning after it stops.
+    // The informer will be stopped when stopCh is closed.
+    Run(stopCh <-chan struct{})
+    // HasSynced returns true if the shared informer's store has been
+    // informed by at least one full LIST of the authoritative state
+    // of the informer's object collection.  This is unrelated to "resync".
+    HasSynced() bool
+    // LastSyncResourceVersion is the resource version observed when last synced with the underlying
+    // store. The value returned is not synchronized with access to the underlying store and is not
+    // thread-safe.
+    LastSyncResourceVersion() string
+}
+
+// SharedIndexInformer provides add and get Indexers ability based on SharedInformer.
+type SharedIndexInformer interface {
+    SharedInformer
+    // AddIndexers add indexers to the informer before it starts.
+    AddIndexers(indexers Indexers) error
+    GetIndexer() Indexer
+}
+```
+
+#### Structs
+
+``` go
+type sharedIndexInformer struct {
+    indexer    Indexer
+    controller Controller
+
+    processor             *sharedProcessor
+    cacheMutationDetector MutationDetector
+
+    listerWatcher ListerWatcher
+
+    // objectType is an example object of the type this informer is
+    // expected to handle.  Only the type needs to be right, except
+    // that when that is `unstructured.Unstructured` the object's
+    // `"apiVersion"` and `"kind"` must also be right.
+    objectType runtime.Object
+
+    // resyncCheckPeriod is how often we want the reflector's resync timer to fire so it can call
+    // shouldResync to check if any of our listeners need a resync.
+    resyncCheckPeriod time.Duration
+    // defaultEventHandlerResyncPeriod is the default resync period for any handlers added via
+    // AddEventHandler (i.e. they don't specify one and just want to use the shared informer's default
+    // value).
+    defaultEventHandlerResyncPeriod time.Duration
+    // clock allows for testability
+    clock clock.Clock
+
+    started, stopped bool
+    startedLock      sync.Mutex
+
+    // blockDeltas gives a way to stop all event distribution so that a late event handler
+    // can safely join the shared informer.
+    blockDeltas sync.Mutex
+}
+
 func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
     defer utilruntime.HandleCrash()
 
@@ -45,6 +137,169 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
     s.controller.Run(stopCh)
 }
 
+func (s *sharedIndexInformer) HasSynced() bool {
+    s.startedLock.Lock()
+    defer s.startedLock.Unlock()
+
+    if s.controller == nil {
+        return false
+    }
+    return s.controller.HasSynced()
+}
+
+func (s *sharedIndexInformer) LastSyncResourceVersion() string {
+    s.startedLock.Lock()
+    defer s.startedLock.Unlock()
+
+    if s.controller == nil {
+        return ""
+    }
+    return s.controller.LastSyncResourceVersion()
+}
+
+func (s *sharedIndexInformer) GetStore() Store {
+    return s.indexer
+}
+
+func (s *sharedIndexInformer) GetIndexer() Indexer {
+    return s.indexer
+}
+
+func (s *sharedIndexInformer) AddIndexers(indexers Indexers) error {
+    s.startedLock.Lock()
+    defer s.startedLock.Unlock()
+
+    if s.started {
+        return fmt.Errorf("informer has already started")
+    }
+
+    return s.indexer.AddIndexers(indexers)
+}
+
+func (s *sharedIndexInformer) GetController() Controller {
+    return &dummyController{informer: s}
+}
+
+func (s *sharedIndexInformer) AddEventHandler(handler ResourceEventHandler) {
+    s.AddEventHandlerWithResyncPeriod(handler, s.defaultEventHandlerResyncPeriod)
+}
+
+func determineResyncPeriod(desired, check time.Duration) time.Duration {
+    if desired == 0 {
+        return desired
+    }
+    if check == 0 {
+        klog.Warningf("The specified resyncPeriod %v is invalid because this shared informer doesn't support resyncing", desired)
+        return 0
+    }
+    if desired < check {
+        klog.Warningf("The specified resyncPeriod %v is being increased to the minimum resyncCheckPeriod %v", desired, check)
+        return check
+    }
+    return desired
+}
+
+const minimumResyncPeriod = 1 * time.Second
+
+func (s *sharedIndexInformer) AddEventHandlerWithResyncPeriod(handler ResourceEventHandler, resyncPeriod time.Duration) {
+    s.startedLock.Lock()
+    defer s.startedLock.Unlock()
+
+    if s.stopped {
+        klog.V(2).Infof("Handler %v was not added to shared informer because it has stopped already", handler)
+        return
+    }
+
+    if resyncPeriod > 0 {
+        if resyncPeriod < minimumResyncPeriod {
+            klog.Warningf("resyncPeriod %d is too small. Changing it to the minimum allowed value of %d", resyncPeriod, minimumResyncPeriod)
+            resyncPeriod = minimumResyncPeriod
+        }
+
+        if resyncPeriod < s.resyncCheckPeriod {
+            if s.started {
+                klog.Warningf("resyncPeriod %d is smaller than resyncCheckPeriod %d and the informer has already started. Changing it to %d", resyncPeriod, s.resyncCheckPeriod, s.resyncCheckPeriod)
+                resyncPeriod = s.resyncCheckPeriod
+            } else {
+                // if the event handler's resyncPeriod is smaller than the current resyncCheckPeriod, update
+                // resyncCheckPeriod to match resyncPeriod and adjust the resync periods of all the listeners
+                // accordingly
+                s.resyncCheckPeriod = resyncPeriod
+                s.processor.resyncCheckPeriodChanged(resyncPeriod)
+            }
+        }
+    }
+
+    listener := newProcessListener(handler, resyncPeriod, determineResyncPeriod(resyncPeriod, s.resyncCheckPeriod), s.clock.Now(), initialBufferSize)
+
+    if !s.started {
+        s.processor.addListener(listener)
+        return
+    }
+
+    // in order to safely join, we have to
+    // 1. stop sending add/update/delete notifications
+    // 2. do a list against the store
+    // 3. send synthetic "Add" events to the new handler
+    // 4. unblock
+    s.blockDeltas.Lock()
+    defer s.blockDeltas.Unlock()
+
+    s.processor.addListener(listener)
+    for _, item := range s.indexer.List() {
+        listener.add(addNotification{newObj: item})
+    }
+}
+
+func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
+    s.blockDeltas.Lock()
+    defer s.blockDeltas.Unlock()
+
+    // from oldest to newest
+    for _, d := range obj.(Deltas) {
+        switch d.Type {
+        case Sync, Replaced, Added, Updated:
+            s.cacheMutationDetector.AddObject(d.Object)
+            if old, exists, err := s.indexer.Get(d.Object); err == nil && exists {
+                if err := s.indexer.Update(d.Object); err != nil {
+                    return err
+                }
+
+                isSync := false
+                switch {
+                case d.Type == Sync:
+                    // Sync events are only propagated to listeners that requested resync
+                    isSync = true
+                case d.Type == Replaced:
+                    if accessor, err := meta.Accessor(d.Object); err == nil {
+                        if oldAccessor, err := meta.Accessor(old); err == nil {
+                            // Replaced events that didn't change resourceVersion are treated as resync events
+                            // and only propagated to listeners that requested resync
+                            isSync = accessor.GetResourceVersion() == oldAccessor.GetResourceVersion()
+                        }
+                    }
+                }
+                s.processor.distribute(updateNotification{oldObj: old, newObj: d.Object}, isSync)
+            } else {
+                if err := s.indexer.Add(d.Object); err != nil {
+                    return err
+                }
+                s.processor.distribute(addNotification{newObj: d.Object}, false)
+            }
+        case Deleted:
+            if err := s.indexer.Delete(d.Object); err != nil {
+                return err
+            }
+            s.processor.distribute(deleteNotification{oldObj: d.Object}, false)
+        }
+    }
+    return nil
+}
+```
+
+`client-go@b111a621:tools/cache/controller.go:121`
+
+``` go
 // Run begins processing items, and will continue until a value is sent down stopCh or it is closed.
 // It's an error to call Run more than once.
 // Run blocks; call via go.
@@ -86,8 +341,29 @@ func (r *Reflector) Run(stopCh <-chan struct{}) {
         }
     }, r.backoffManager, true, stopCh)
 }
+```
 
+`c.config.Queue` 实现了 `cache.Store` 接口。在此处的实现为 `cache.DeltaFIFO`，源码位于 `tools/cache/shared_informer.go:341`
 
+``` go
+    fifo := NewDeltaFIFOWithOptions(DeltaFIFOOptions{
+        KnownObjects:          s.indexer,
+        EmitDeltaTypeReplaced: true,
+    })
+
+    cfg := &Config{
+        Queue:            fifo,
+        ListerWatcher:    s.listerWatcher,
+        ObjectType:       s.objectType,
+        FullResyncPeriod: s.resyncCheckPeriod,
+        RetryOnError:     false,
+        ShouldResync:     s.processor.shouldResync,
+
+        Process: s.HandleDeltas,
+    }
+```
+
+``` go
 // ListAndWatch first lists all items and get the resource version at the moment of call,
 // and then use the resource version to watch.
 // It returns error if ListAndWatch didn't even try to initialize watch.
@@ -290,3 +566,31 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
     }
 }
 ```
+
+`Resync` 的源码为 `tools/cache/delta_fifo.go:592`
+
+``` go
+// Resync adds, with a Sync type of Delta, every object listed by
+// `f.knownObjects` whose key is not already queued for processing.
+// If `f.knownObjects` is `nil` then Resync does nothing.
+func (f *DeltaFIFO) Resync() error {
+    f.lock.Lock()
+    defer f.lock.Unlock()
+
+    if f.knownObjects == nil {
+        return nil
+    }
+
+    keys := f.knownObjects.ListKeys()
+    for _, k := range keys {
+        if err := f.syncKeyLocked(k); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+```
+
+## Custom Informer
+
+`Kubernetes` 使用 [informer-gen](https://github.com/kubernetes/code-generator/tree/master/cmd/informer-gen) 生成代码。
