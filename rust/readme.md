@@ -56,3 +56,24 @@ $ rustup component add rls rust-analysis rust-src
 $ cargo install cargo-watch
 ```
 
+### linker `cc` not found
+
+``` bash
+$ cargo run
+   Compiling hello-world v0.1.0 (/home/divinerapier/code/rust/github.com/divinerapier/example/hello-world)
+error: linker `cc` not found
+  |
+  = note: No such file or directory (os error 2)
+
+error: aborting due to previous error
+
+error: could not compile `hello-world`.
+
+To learn more, run the command again with --verbose.
+```
+
+please run:
+
+``` bash
+$ sudo apt install clang
+```
