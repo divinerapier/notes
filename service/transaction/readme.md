@@ -12,3 +12,7 @@ https://seata.io/zh-cn/blog/seata-analysis-go-server.html
 $ make docker
 $ docker-compose up -d
 ```
+
+#### Open Dashboard
+
+`http://${dashboard-post}:${dashboard-port}/ui/index.html`
