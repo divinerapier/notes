@@ -13,7 +13,7 @@ $ echo "pinentry-program /usr/local/bin/pinentry-mac" >> ~/.gnupg/gpg-agent.conf
 ### On Ubuntu
 
 ``` bash
-$ sudo apt install gunpg2
+$ sudo apt install gnupg2
 ```
 
 ## Generate key
