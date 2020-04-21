@@ -2,8 +2,16 @@
 
 ## install deps
 
+### CentOS
+
 ``` bash
 $ yum install gcc kernel-devel make ncurses-devel
+```
+
+### Ubuntu
+
+``` bash
+$ sudo apt install libncurses5-dev
 ```
 
 ## libevent
@@ -23,6 +31,7 @@ make install
 curl -LOk https://github.com/tmux/tmux/releases/download/2.9/tmux-2.9.tar.gz
 tar -xf tmux-2.9.tar.gz
 cd tmux-2.9
+./configure --prefix=/usr/local
 LDFLAGS="-L/usr/local/lib -Wl,-rpath=/usr/local/lib" ./configure --prefix=/usr/local
 make -j4
 make install
