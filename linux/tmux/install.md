@@ -1,7 +1,10 @@
 # Install tmux 2.9 on Centos
 
 ## install deps
-yum install gcc kernel-devel make ncurses-devel
+
+``` bash
+$ yum install gcc kernel-devel make ncurses-devel
+```
 
 ## libevent
 
