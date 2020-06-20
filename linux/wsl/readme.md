@@ -52,6 +52,12 @@ pacman-key -S manjaro-keyring
 
 ## Install GUI
 
+### X410
+
+一款 `x-server` 软件，在 `Microsoft Store` 下载。
+
+### Linx ENV
+
 ``` bash
 export DISPLAY=$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null):0
 export LIBGL_ALWAYS_INDIRECT=1
