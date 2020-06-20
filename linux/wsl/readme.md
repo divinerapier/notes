@@ -50,6 +50,44 @@ pacman-key --init
 pacman-key -S manjaro-keyring
 ```
 
+## Install GUI
+
+``` bash
+export DISPLAY=$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null):0
+export LIBGL_ALWAYS_INDIRECT=1
+export $(dbus-launch)
+```
+
+### XFCE4
+
+#### Install XFCE4
+
+``` bash
+sudo pacman -S xfce4 xfce4-terminal
+```
+
+#### Start XFCE4
+
+``` bash
+startxfce4
+```
+
+### KDE
+
+#### Install KDE
+
+``` bash
+sudo pacman -S  plasma-wayland-session
+sudo pacman -S plasma kio-extras
+sudo pacman -S kde-applications
+```
+
+#### Start KDE
+
+``` bash
+startplasma-x11 --all
+```
+
 ## Clion
 
 [how-to-use-wsl-development-environment-in-clion](https://www.jetbrains.com/help/clion/how-to-use-wsl-development-environment-in-clion.html)
