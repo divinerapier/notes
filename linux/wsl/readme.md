@@ -41,6 +41,15 @@ wsl --set-default-version 2
 2. 在分发版的页面中，选择“获取”。
 3. 启动 `Linux` 发行版，等待提示，设置用户名和密码。
 
+## Install Manjaro
+
+### Set Pacman Key
+
+``` bash
+pacman-key --init
+pacman-key -S manjaro-keyring
+```
+
 ## Clion
 
 [how-to-use-wsl-development-environment-in-clion](https://www.jetbrains.com/help/clion/how-to-use-wsl-development-environment-in-clion.html)
