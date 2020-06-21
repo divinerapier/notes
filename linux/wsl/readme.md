@@ -85,6 +85,12 @@ pacman-key --init
 pacman-key -S manjaro-keyring
 ```
 
+### Install yaourt
+
+``` bash
+sudo pacman -Syy yaourt
+```
+
 ## Install GUI
 
 ### X410
