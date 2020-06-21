@@ -199,6 +199,9 @@ export LC_ALL="zh_CN.UTF-8"
 
 ``` bash
 sudo pacman -S wqy-microhei
+
+# refresh font cache
+fc-cache -fv
 ```
 
 ### Locale
