@@ -43,6 +43,10 @@ wsl --set-default-version 2
 
 ## Install Manjaro
 
+### Download
+
+从 [ArchWSL](https://github.com/yuk7/ArchWSL/releases) 下载 `Arch.zip`，
+
 ### Set Pacman Key
 
 ``` bash
@@ -60,9 +64,15 @@ pacman-key -S manjaro-keyring
 
 ``` bash
 export DISPLAY=$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null):0
-export LIBGL_ALWAYS_INDIRECT=1
+export XDG_RUNTIME_DIR=/home/divinerapier
+export RUNLEVEL=3
 export $(dbus-launch)
+export LIBGL_ALWAYS_INDIRECT=1
 ```
+
+[how-to-export-dbus-session-bus-address](https://stackoverflow.com/questions/41242460/how-to-export-dbus-session-bus-address)
+
+[how-to-set-up-working-x11-forwarding-on-wsl2](https://stackoverflow.com/questions/61110603/how-to-set-up-working-x11-forwarding-on-wsl2)
 
 ### XFCE4
 
@@ -83,7 +93,9 @@ startxfce4
 #### Install KDE
 
 ``` bash
-sudo pacman -S  plasma-wayland-session
+sudo pacman -S plasma-meta
+sudo pacman -S xorg
+sudo pacman -S plasma-wayland-session
 sudo pacman -S plasma kio-extras
 sudo pacman -S kde-applications
 ```
@@ -112,6 +124,12 @@ localhostForwarding=<bool> # Boolean specifying if ports bound to wildcard or lo
 ```
 
 [Introduce %UserProfile%/.wslconfig file for tweaking WSL2 settings](https://docs.microsoft.com/en-us/windows/wsl/release-notes#build-18945)
+
+### Use Windows Chrome
+
+``` bash
+sudo ln -s /mnt/c/Program\ Files\ \(x86\)/Google/Chrome/Application/chrome.exe /usr/bin/chrome
+```
 
 ## Clion
 
