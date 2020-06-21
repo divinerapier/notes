@@ -197,9 +197,21 @@ export LC_ALL="zh_CN.UTF-8"
 
 ### Chinese Font
 
+#### Install By pacman
+
 ``` bash
 sudo pacman -S wqy-microhei
+```
 
+#### Copy From Windows
+
+``` bash
+sudo cp /mnt/c/Windows/Fonts/Deng.ttf /usr/share/fonts/Deng.ttf
+```
+
+#### Refresh Font Cache
+
+```
 # refresh font cache
 fc-cache -fv
 ```
