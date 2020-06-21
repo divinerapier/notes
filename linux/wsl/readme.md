@@ -91,6 +91,8 @@ pacman-key -S manjaro-keyring
 sudo pacman -Syy yaourt
 ```
 
+[Yaourt 已死！在 Arch 上使用这些替代品](https://zhuanlan.zhihu.com/p/42287487)
+
 ## Install GUI
 
 ### X410
