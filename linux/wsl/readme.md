@@ -142,7 +142,7 @@ makepkg -si
 执行以下命令修改 aururl :
 
 ``` bash
-yay --aururl “https://aur.tuna.tsinghua.edu.cn” --save
+yay --aururl "https://aur.tuna.tsinghua.edu.cn" --save
 ```
 
 修改的配置文件
