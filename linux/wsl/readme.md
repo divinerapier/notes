@@ -45,7 +45,9 @@ wsl --set-default-version 2
 
 ### Download
 
-从 [ArchWSL](https://github.com/yuk7/ArchWSL/releases) 下载 `Arch.zip`，
+从 [ArchWSL](https://github.com/yuk7/ArchWSL/releases) 下载 `Arch.zip`，解压到虚拟机期望存在的位置。
+
+双击 `Arch.exe` 进行安装。
 
 ### Mirrors
 
@@ -92,6 +94,18 @@ sudo pacman -Syy yaourt
 ```
 
 [Yaourt 已死！在 Arch 上使用这些替代品](https://zhuanlan.zhihu.com/p/42287487)
+
+### Install Specific Version of Package Via Pacman
+
+从 [archlinux packages](https://archive.archlinux.org/packages) 找到目标 package。
+
+比如，`clion` 要求 `cmake` 版本在 `2.8.11` 到 `3.16.x` 之间，而 `pacman` 默认版本为 `3.17`。 从上面的链接找到一个合适的版本，执行
+
+``` bash
+sudo pacman -U http://archive.archlinux.org/packages/c/cmake/cmake-3.16.2-1-x86_64.pkg.tar.xz
+```
+
+https://forum.manjaro.org/t/how-to-install-specific-version-of-package-via-pacman/50668
 
 ## Install GUI
 
@@ -173,6 +187,15 @@ sudo ln -s /mnt/c/Program\ Files\ \(x86\)/Google/Chrome/Application/chrome.exe /
 [wsl-webbrowser](https://www.smslit.top/2017/09/02/wsl-webbrowser/)
 
 ## Clion
+
+### Install In WSL2
+
+``` bash
+yay -S clion
+yay -S archlinuxcn/clion-cmake
+```
+
+### Connect To WSL From Windows
 
 [how-to-use-wsl-development-environment-in-clion](https://www.jetbrains.com/help/clion/how-to-use-wsl-development-environment-in-clion.html)
 
