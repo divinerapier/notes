@@ -178,16 +178,51 @@ https://forum.manjaro.org/t/how-to-install-specific-version-of-package-via-pacma
 ### Linux ENV
 
 ``` bash
+# for x11
 export DISPLAY=$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null):0
 export XDG_RUNTIME_DIR=/home/divinerapier
 export RUNLEVEL=3
 export $(dbus-launch)
 export LIBGL_ALWAYS_INDIRECT=1
+
+# for locale
+export LC_CTYPE=zh_CN.UTF-8
+export LANG="zh_CN.UTF-8"
+export LC_ALL="zh_CN.UTF-8"
 ```
 
 [how-to-export-dbus-session-bus-address](https://stackoverflow.com/questions/41242460/how-to-export-dbus-session-bus-address)
 
 [how-to-set-up-working-x11-forwarding-on-wsl2](https://stackoverflow.com/questions/61110603/how-to-set-up-working-x11-forwarding-on-wsl2)
+
+### Chinese Font
+
+``` bash
+sudo pacman -S wqy-microhei
+```
+
+### Locale
+
+执行
+
+``` bash
+sudo vim /etc/locale.gen
+```
+
+取消下面两行的注释
+
+``` conf
+en_US.UTF-8 UTF-8
+zh_CN.UTF-8 UTF-8
+```
+
+初始化语言环境
+
+``` bash
+sudo locale-gen
+```
+
+https://my.oschina.net/u/4362704/blog/3308054
 
 ### XFCE4
 
