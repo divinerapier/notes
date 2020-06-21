@@ -131,6 +131,8 @@ localhostForwarding=<bool> # Boolean specifying if ports bound to wildcard or lo
 sudo ln -s /mnt/c/Program\ Files\ \(x86\)/Google/Chrome/Application/chrome.exe /usr/bin/chrome
 ```
 
+[wsl-webbrowser](https://www.smslit.top/2017/09/02/wsl-webbrowser/)
+
 ## Clion
 
 [how-to-use-wsl-development-environment-in-clion](https://www.jetbrains.com/help/clion/how-to-use-wsl-development-environment-in-clion.html)
