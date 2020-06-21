@@ -175,7 +175,7 @@ https://forum.manjaro.org/t/how-to-install-specific-version-of-package-via-pacma
 
 一款 `x-server` 软件，在 `Microsoft Store` 下载。
 
-### Linx ENV
+### Linux ENV
 
 ``` bash
 export DISPLAY=$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null):0
