@@ -51,6 +51,12 @@ wsl --set-default-version 2
 
 ### Mirrors
 
+手动更改源排名
+
+``` bash
+sudo pacman-mirrors -i -c China -m rank
+```
+
 #### archlinux
 
 编辑 `/etc/pacman.d/mirrorlist`， 在文件的最顶端添加：
@@ -94,6 +100,34 @@ sudo pacman -Syy yaourt
 ```
 
 [Yaourt 已死！在 Arch 上使用这些替代品](https://zhuanlan.zhihu.com/p/42287487)
+
+### Install yay
+
+``` bash
+git clone https://aur.archlinux.org/yay.git
+cd yay
+makepkg -si
+```
+
+#### Configure yay
+
+执行以下命令修改 aururl :
+
+``` bash
+yay --aururl “https://aur.tuna.tsinghua.edu.cn” --save
+```
+
+修改的配置文件
+
+``` bash
+vim ~/.config/yay/config.json
+```
+
+查看配置
+
+``` bash
+yay -P -g
+```
 
 ### Install Specific Version of Package Via Pacman
 
