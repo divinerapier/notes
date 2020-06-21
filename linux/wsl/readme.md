@@ -94,6 +94,25 @@ sudo pacman -S kde-applications
 startplasma-x11 --all
 ```
 
+## WSL2 Settings
+
+配置文件位于 `%UserProfile%/.wslconfig`
+
+``` ini
+[wsl2]
+kernel=<path>              # An absolute Windows path to a custom Linux kernel.
+memory=<size>              # How much memory to assign to the WSL2 VM.
+processors=<number>        # How many processors to assign to the WSL2 VM.
+swap=<size>                # How much swap space to add to the WSL2 VM. 0 for no swap file.
+swapFile=<path>            # An absolute Windows path to the swap vhd.
+localhostForwarding=<bool> # Boolean specifying if ports bound to wildcard or localhost in the WSL2 VM should be connectable from the host via localhost:port (default true).
+
+# <path> entries must be absolute Windows paths with escaped backslashes, for example C:\\Users\\Ben\\kernel
+# <size> entries must be size followed by unit, for example 8GB or 512MB
+```
+
+[Introduce %UserProfile%/.wslconfig file for tweaking WSL2 settings](https://docs.microsoft.com/en-us/windows/wsl/release-notes#build-18945)
+
 ## Clion
 
 [how-to-use-wsl-development-environment-in-clion](https://www.jetbrains.com/help/clion/how-to-use-wsl-development-environment-in-clion.html)
