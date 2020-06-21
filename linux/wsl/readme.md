@@ -43,11 +43,39 @@ wsl --set-default-version 2
 
 ## Install Manjaro
 
-### Download
+### Download And Install Arch
 
 从 [ArchWSL](https://github.com/yuk7/ArchWSL/releases) 下载 `Arch.zip`，解压到虚拟机期望存在的位置。
 
 双击 `Arch.exe` 进行安装。
+
+### Configure Arch WSL2
+
+#### Create User
+
+在 `Arch` 中运行
+
+``` bash
+sudo useradd -r -m -s /bin/bash your_name
+sudo chmod +w /etc/sudoers
+sudo vim /etc/sudoers
+# 添加 your_name ALL=(ALL) ALL
+sudo chmod -w /etc/sudoers
+
+# 设置密码
+passwd your_name
+```
+
+#### Set Default  WSL
+
+``` powershell
+# 设置运行时默认的用户
+.\Arch.exe config --default-user your_name
+# 设置默认运行的 WSL
+#    --set-default、-s <发行版本>
+#        将分发设置为默认值。
+wsl -s Arch
+```
 
 ### Mirrors
 
