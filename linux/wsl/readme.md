@@ -47,6 +47,37 @@ wsl --set-default-version 2
 
 从 [ArchWSL](https://github.com/yuk7/ArchWSL/releases) 下载 `Arch.zip`，
 
+### Mirrors
+
+#### archlinux
+
+编辑 `/etc/pacman.d/mirrorlist`， 在文件的最顶端添加：
+
+``` conf
+Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch
+```
+更新软件包缓存:
+``` bash
+sudo pacman -Syy
+```
+
+[archlinux](https://mirrors.tuna.tsinghua.edu.cn/help/archlinux/)
+
+[wiki](https://wiki.archlinux.org/index.php/Arch_Linux_Archive)
+
+#### archlinuxcn
+
+在 `/etc/pacman.conf` 文件末尾添加以下两行：
+
+``` conf
+[archlinuxcn]
+Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxcn/$arch
+```
+
+之后安装 `archlinuxcn-keyring` 包导入 GPG key。
+
+[archlinuxcn](https://mirrors.tuna.tsinghua.edu.cn/help/archlinuxcn/)
+
 ### Set Pacman Key
 
 ``` bash
