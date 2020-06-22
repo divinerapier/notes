@@ -238,6 +238,7 @@ sudo locale-gen
 ```
 
 https://my.oschina.net/u/4362704/blog/3308054
+[简书：linux安装字体](https://www.jianshu.com/p/3fe21f3730b1)
 
 ### XFCE4
 
