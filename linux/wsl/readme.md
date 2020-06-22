@@ -43,6 +43,8 @@ wsl --set-default-version 2
 
 ## Install Manjaro
 
+[Manjaro WSL2 配置记录](https://my.oschina.net/u/4362704/blog/3308054)
+
 ### Download And Install Arch
 
 从 [ArchWSL](https://github.com/yuk7/ArchWSL/releases) 下载 `Arch.zip`，解压到虚拟机期望存在的位置。
