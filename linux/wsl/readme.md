@@ -45,6 +45,12 @@ wsl --set-default-version 2
 
 [Manjaro WSL2 配置记录](https://my.oschina.net/u/4362704/blog/3308054)
 
+[WSL学习：安装ArchLinux和Root/Cling以及注意事项](https://www.cnblogs.com/wurui1994/p/7771398.html)
+
+[WSL使用小结：从ArchLinux到Manjaro](https://www.cnblogs.com/wurui1994/p/7839777.html)
+
+[WSL+Manjaro+Xfce打造完美开发环境](https://www.tiger2doudou.com/doku.php?id=windows:tools:run_manjaro_and_xfce_on_wsl)
+
 ### Download And Install Arch
 
 从 [ArchWSL](https://github.com/yuk7/ArchWSL/releases) 下载 `Arch.zip`，解压到虚拟机期望存在的位置。
