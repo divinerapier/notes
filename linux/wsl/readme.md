@@ -12,6 +12,7 @@ dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux 
 ### Update Windows
 
 若要更新到 WSL 2，必须满足以下条件：
+* [加入 Windows 预览体验计划](https://insider.windows.com/zh-cn/getting-started/#register)
 * 运行 Windows 10（[已更新到版本 2004](https://docs.microsoft.com/zh-cn/windows/wsl/install-win10) 的内部版本 19041 或更高版本）。
 * 通过按 Windows 徽标键 + R，检查你的 Windows 版本，然后键入 winver，选择“确定”。 （或者在 Windows 命令提示符下输入 ver 命令）。 如果内部版本低于 19041，请[更新到最新的 Windows 版本](https://docs.microsoft.com/zh-cn/windows/wsl/install-win10)。 [获取 Windows 更新助手](https://docs.microsoft.com/zh-cn/windows/wsl/install-win10)。
 
