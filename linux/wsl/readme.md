@@ -116,6 +116,7 @@ sudo pacman -Syy
 
 ``` conf
 [archlinuxcn]
+SigLevel = Never
 Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxcn/$arch
 ```
 
