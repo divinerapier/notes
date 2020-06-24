@@ -127,8 +127,8 @@ Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxcn/$arch
 ### Set Pacman Key
 
 ``` bash
-pacman-key --init
-pacman-key -S manjaro-keyring
+sudo pacman-key --init
+sudo pacman -S manjaro-keyring archlinux-keyring
 ```
 
 ### Install yaourt
