@@ -188,6 +188,8 @@ https://forum.manjaro.org/t/how-to-install-specific-version-of-package-via-pacma
 
 一款 `x-server` 软件，在 `Microsoft Store` 下载。
 
+启动之后，右键开启 `Allow Public Access`
+
 ### Linux ENV
 
 ``` bash
