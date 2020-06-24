@@ -116,11 +116,14 @@ sudo pacman -Syy
 
 ``` conf
 [archlinuxcn]
-SigLevel = Never
 Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxcn/$arch
 ```
 
-之后安装 `archlinuxcn-keyring` 包导入 GPG key。
+之后安装 `archlinuxcn-keyring` 包导入 GPG key
+
+``` bash
+sudo pacman -S archlinuxcn-keyring
+```
 
 [archlinuxcn](https://mirrors.tuna.tsinghua.edu.cn/help/archlinuxcn/)
 
