@@ -24,7 +24,7 @@ $ cat /sys/devices/system/cpu/cpu0/cache/index3/size
 ```
 
 你可能注意到，三级缓存要比一、二级缓存大许多倍，这是因为当下的 `CPU` 都是多核心的，每个核心都有自己的一、二级缓存，但三级缓存却是一颗 `CPU` 上所有核心共享的。
-
+![cpu cache](./images/01.jpg)
 程序执行时，会先将内存中的数据载入到共享的三级缓存中，再进入每颗核心独有的二级缓存，最后进入最快的一级缓存，之后才会被 `CPU` 使用，就像下面这张图。
 
 缓存要比内存快很多。 `CPU` 访问一次内存通常需要 `100` 个时钟周期以上，而访问一级缓存只需要 `4~5` 个时钟周期，二级缓存大约 `12` 个时钟周期，三级缓存大约 `30` 个时钟周期(对于 `2GHZ` 主频的 `CPU` 来说，一个时钟周期是 `0.5 ns`。可以在 `LZMA` 的 [Benchmark](https://www.7-cpu.com/) 中找到几种典型 `CPU` 缓存的访问速度)。
@@ -79,6 +79,8 @@ $ cat /sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size
 
 关于 `CPU Cache Line` 的应用其实非常广泛，如果你用过 `Nginx`，会发现它是用哈希表来存放域名、`HTTP` 头部等数据的，这样访问速度非常快，而哈希表里桶的大小如 `server_names_hash_bucket_size`，它默认就等于 `CPU Cache Line` 的值。由于所存放的字符串长度不能大于桶的大小，所以当需要存放更长的字符串时，就需要修改桶大小，但 Nginx 官网上明确建议它应该是 `CPU Cache Line` 的整数倍。
 
+![Nginx The Best Practice](./images/02.png)
+
 为什么要做这样的要求呢？就是因为按照 `cpu cache line`(比如 `64 Bytes`)来访问内存时，不会出现多核 `CPU` 下的伪共享问题，可以尽量减少访问内存的次数。比如，若桶大小为 `64 Bytes`，那么根据地址获取字符串时只需要访问一次内存，而桶大小为 `50 Bytes`，会导致最坏 2 次访问内存，而 70 Bytes 最坏会有 3 次访问内存。
 
 使用 `Linux` 操作系统，可以通过一个名叫 `perf` 的工具直观地验证缓存命中的情况，[用法参考](http://www.brendangregg.com/perf.html)。
@@ -99,6 +101,10 @@ yay -S perf
 • `cycles`: 事件指明了运行的时钟周期
 • `ipc`: `instructions/cycles` 可以得到每时钟周期所执行的指令数
 • 如果缓存未命中，则 `CPU` 要等待内存的慢速读取，因此 `IPC` 就会很低。 `ipc(i,j)` 的值也比 `ipc(j, i)` 要高得多
+
+![slow](./images/03.png)
+
+![fast](./images/04.png)
 
 ### 提升指令缓存的命中率
 
@@ -129,6 +135,10 @@ sort(array, array +N);
 究竟有多高呢？我们还是用 `Linux` 上的 `perf` 来做个验证。使用 `-e` 选项指明 `branch-loads` 事件和 `branch-load-misses` 事件，它们分别表示分支预测的次数，以及预测失败的次数。通过 `L1-icache-load-misses` 也能查看到一级缓存中指令的未命中情况。
 
 执行上面的测试代码后，可以看到，先排序的话分支预测的成功率非常高，而且一级指令缓存的未命中率也有大幅下降。
+
+![cache misses - 1](./images/05.png)
+
+![cache misses - 2](./images/06.png)
 
 `C/C++` 语言中编译器还给应用程序员提供了显式预测分支概率的工具，如果 `if` 中的条件表达式判断为 真 的概率非常高，我们可以用 `likely` 宏把它括在里面，反之则可以用 `unlikely` 宏。当然，`CPU` 自身的条件预测已经非常准了，仅当我们确信 `CPU` 条件预测不会准，且我们能够知晓实际概率时，才需要加入这两个宏。
 
