@@ -119,21 +119,17 @@ sudo pacman -Syy
 Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxcn/$arch
 ```
 
-之后安装 `archlinuxcn-keyring` 包导入 GPG key
-
-``` bash
-sudo pacman -S archlinuxcn-keyring
-```
-
 [archlinuxcn](https://mirrors.tuna.tsinghua.edu.cn/help/archlinuxcn/)
 
-### Set Pacman Key
+### Set Archlinux Key
+
+之后安装 `archlinuxcn-keyring` 包导入 GPG key
 
 ``` bash
 sudo pacman-key --init
 sudo pacman-key --populate
 sudo pacman-key --refresh-keys
-sudo pacman -S manjaro-keyring archlinux-keyring
+sudo pacman -S archlinux-keyring
 ```
 
 ### Install yaourt
