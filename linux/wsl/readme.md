@@ -131,6 +131,8 @@ sudo pacman -S archlinuxcn-keyring
 
 ``` bash
 sudo pacman-key --init
+sudo pacman-key --populate
+sudo pacman-key --refresh-keys
 sudo pacman -S manjaro-keyring archlinux-keyring
 ```
 
